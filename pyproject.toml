@@ -1,0 +1,35 @@
+[project]
+name = "autoria-data-parser"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "maksym",email = "maksym.potapchuk.hp@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "playwright (>=1.56.0,<2.0.0)",
+    "ruff (>=0.14.4,<0.15.0)",
+    "pytest-playwright (>=0.7.1,<0.8.0)",
+    "celery (>=5.5.3,<6.0.0)",
+    "sqlalchemy (>=2.0.44,<3.0.0)",
+    "flask (>=3.1.2,<4.0.0)",
+    "flask-restful (>=0.3.10,<0.4.0)",
+    "numpy (>=2.0.0,<2.3.0)",
+    "opencv-python (>=4.12.0,<5.0.0)",
+    "requests (>=2.32.5,<3.0.0)",
+    "flask-sqlalchemy (>=3.1.1,<4.0.0)",
+    "alembic (>=1.17.2,<2.0.0)",
+    "psycopg2-binary (>=2.9.11,<3.0.0)",
+    "redis (>=7.1.0,<8.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.11.0"
+
