@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Адмін-панель - Управління авто</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 24px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .stat-card h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .filters input,
+        .filters select {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .filters button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-CREATED {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-UPDATED {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .status-DELETED {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-NOT_PROCESSED {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .btn-edit {
+            padding: 6px 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .pagination {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .pagination a,
+        .pagination span {
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+        }
+        .pagination .active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .close {
+            cursor: pointer;
+            font-size: 24px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .form-group textarea {
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚗 Адмін-панель - Управління авто</h1>
+        <div class="nav-links">
+            <a href="/">Головна</a>
+            <a href="/admin">Адмін</a>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <h3>Всього авто</h3>
+            <div class="value">{{ stats.total }}</div>
+        </div>
+        {% for status, count in stats.by_status.items() %}
+        <div class="stat-card">
+            <h3>{{ status }}</h3>
+            <div class="value">{{ count }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="filters">
+        <input type="text" id="search" placeholder="Пошук (марка, опис, лінк)" value="{{ search or '' }}">
+        <select id="status">
+            <option value="">Всі статуси</option>
+            <option value="CREATED" {% if status == 'CREATED' %}selected{% endif %}>CREATED</option>
+            <option value="UPDATED" {% if status == 'UPDATED' %}selected{% endif %}>UPDATED</option>
+            <option value="DELETED" {% if status == 'DELETED' %}selected{% endif %}>DELETED</option>
+            <option value="NOT_PROCESSED" {% if status == 'NOT_PROCESSED' %}selected{% endif %}>NOT_PROCESSED</option>
+        </select>
+        <button onclick="applyFilters()">Фільтрувати</button>
+        <button onclick="resetFilters()">Скинути</button>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Марка</th>
+                    <th>Рік</th>
+                    <th>Ціна</th>
+                    <th>Пробіг</th>
+                    <th>Статус</th>
+                    <th>Опубліковано</th>
+                    <th>Дата створення</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for car in cars %}
+                <tr>
+                    <td>{{ car.id }}</td>
+                    <td>{{ car.brand }}</td>
+                    <td>{{ car.year }}</td>
+                    <td>{{ "{:,}".format(car.price) }} $</td>
+                    <td>{{ "{:,}".format(car.mileage) }} км</td>
+                    <td>
+                        <span class="status-badge status-{{ car.processed_status.value if car.processed_status else 'NOT_PROCESSED' }}">
+                            {{ car.processed_status.value if car.processed_status else 'NOT_PROCESSED' }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if car.is_published %}
+                            ✅
+                        {% else %}
+                            ❌
+                        {% endif %}
+                    </td>
+                    <td>{{ car.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editCar({{ car.id }})">Редагувати</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{% if status %}&status={{ status }}{% endif %}{% if search %}&search={{ search }}{% endif %}">← Попередня</a>
+        {% endif %}
+        <span class="active">{{ page }} / {{ pages }}</span>
+        {% if page < pages %}
+        <a href="?page={{ page + 1 }}{% if status %}&status={{ status }}{% endif %}{% if search %}&search={{ search }}{% endif %}">Наступна →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Modal для редагування -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Редагувати авто</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <form id="editForm" onsubmit="saveCar(event)">
+                <input type="hidden" id="car_id" name="car_id">
+                <div class="form-group">
+                    <label>Марка:</label>
+                    <input type="text" id="brand" name="brand" required>
+                </div>
+                <div class="form-group">
+                    <label>Рік:</label>
+                    <input type="number" id="year" name="year" required>
+                </div>
+                <div class="form-group">
+                    <label>Ціна ($):</label>
+                    <input type="number" id="price" name="price" required>
+                </div>
+                <div class="form-group">
+                    <label>Пробіг (км):</label>
+                    <input type="number" id="mileage" name="mileage" required>
+                </div>
+                <div class="form-group">
+                    <label>Тип палива:</label>
+                    <input type="text" id="fuel_type" name="fuel_type" required>
+                </div>
+                <div class="form-group">
+                    <label>Коробка передач:</label>
+                    <input type="text" id="transmission" name="transmission" required>
+                </div>
+                <div class="form-group">
+                    <label>Колір:</label>
+                    <input type="text" id="color" name="color">
+                </div>
+                <div class="form-group">
+                    <label>Локація:</label>
+                    <input type="text" id="location" name="location">
+                </div>
+                <div class="form-group">
+                    <label>Опис:</label>
+                    <textarea id="description" name="description" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Статус:</label>
+                    <select id="processed_status" name="processed_status">
+                        <option value="CREATED">CREATED</option>
+                        <option value="UPDATED">UPDATED</option>
+                        <option value="DELETED">DELETED</option>
+                        <option value="NOT_PROCESSED">NOT_PROCESSED</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="is_published" name="is_published"> Опубліковано
+                    </label>
+                </div>
+                <button type="submit" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Зберегти</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function applyFilters() {
+            const search = document.getElementById('search').value;
+            const status = document.getElementById('status').value;
+            let url = '/admin?';
+            if (status) url += 'status=' + status + '&';
+            if (search) url += 'search=' + encodeURIComponent(search);
+            window.location.href = url;
+        }
+
+        function resetFilters() {
+            window.location.href = '/admin';
+        }
+
+        async function editCar(carId) {
+            const response = await fetch(`/admin/car/${carId}`);
+            const car = await response.json();
+            
+            document.getElementById('car_id').value = car.id;
+            document.getElementById('brand').value = car.brand;
+            document.getElementById('year').value = car.year;
+            document.getElementById('price').value = car.price;
+            document.getElementById('mileage').value = car.mileage;
+            document.getElementById('fuel_type').value = car.fuel_type;
+            document.getElementById('transmission').value = car.transmission;
+            document.getElementById('color').value = car.color || '';
+            document.getElementById('location').value = car.location || '';
+            document.getElementById('description').value = car.description;
+            document.getElementById('processed_status').value = car.processed_status || 'NOT_PROCESSED';
+            document.getElementById('is_published').checked = car.is_published;
+            
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        async function saveCar(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData);
+            
+            const response = await fetch(`/admin/car/${data.car_id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            
+            if (response.ok) {
+                alert('Авто успішно оновлено!');
+                location.reload();
+            } else {
+                alert('Помилка при оновленні авто');
+            }
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('editModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
+

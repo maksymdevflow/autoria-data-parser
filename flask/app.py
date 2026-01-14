@@ -6,17 +6,23 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from flask import Flask, request, jsonify, render_template_string
-from web.config.settings import DevelopmentConfig
-from web.crud.crud_link.crud import create_new_link
-from web.crud.crud_car.crud import get_cars, get_car_by_id, update_car, get_statistics
-from database.models import StatusProcessed
-import json
-import sys
-import os
+# Імпортуємо Flask БІБЛІОТЕКУ (не папку)
+import flask as flask_lib
+Flask = flask_lib.Flask
+request = flask_lib.request
+jsonify = flask_lib.jsonify
+render_template_string = flask_lib.render_template_string
 
-# Імпортуємо Celery задачі
-from tasks.config import scrape_parent_link, delete_cars
+# Імпортуємо налаштування
+import importlib.util
+settings_path = os.path.join(os.path.dirname(__file__), "config", "settings.py")
+spec = importlib.util.spec_from_file_location("flask_config_settings", settings_path)
+settings_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(settings_module)
+DevelopmentConfig = settings_module.DevelopmentConfig
+
+from crud.crud_link.crud import create_new_link
+from app.scraper.scraper_service import run_scraper_for_link
 
 app = Flask(__name__)
 
@@ -186,7 +192,7 @@ def upload_link():
     
     # POST запит
     url = request.form.get("link", "").strip()
-    car_type = request.form.get("category", "").strip()  # category з форми = car_type в БД
+    category = request.form.get("category", "").strip()
     owner = request.form.get("owner", "").strip()
     
     if not url:
@@ -196,7 +202,7 @@ def upload_link():
             message_type="error"
         ), 400
     
-    if not car_type:
+    if not category:
         return render_template_string(
             UPLOAD_LINK_FORM,
             message="Помилка: Оберіть категорію",
@@ -205,14 +211,14 @@ def upload_link():
     
     try:
         # Створюємо лінк в БД
-        link_obj = create_new_link(url, car_type=car_type if car_type else None, owner=owner if owner else None)
+        link_obj = create_new_link(url, category=category if category else None, owner=owner if owner else None)
         
-        # Додаємо задачу в Celery чергу для парсингу
-        scrape_parent_link.delay(url, link_obj.id)
+        # Запускаємо парсер в окремому потоці
+        run_scraper_for_link(url, link_obj.id)
         
         return render_template_string(
             UPLOAD_LINK_FORM,
-            message=f"✅ Лінк успішно додано! ID: {link_obj.id}. Парсер додано в чергу Celery.",
+            message=f"✅ Лінк успішно додано! ID: {link_obj.id}. Парсер запущено в фоновому режимі.",
             message_type="success"
         )
     except Exception as e:
@@ -228,7 +234,7 @@ def create_link_api():
     """API endpoint для створення лінка (JSON)"""
     data = request.get_json(silent=True) or {}
     url = data.get("link", "").strip()
-    car_type = data.get("category", "").strip()  # category з JSON = car_type в БД
+    category = data.get("category", "").strip()
     owner = data.get("owner", "").strip()
 
     if not url:
@@ -237,126 +243,24 @@ def create_link_api():
     try:
         link_obj = create_new_link(
             url, 
-            car_type=car_type if car_type else None, 
+            category=category if category else None, 
             owner=owner if owner else None
         )
         
-        # Додаємо задачу в Celery чергу для парсингу
-        scrape_parent_link.delay(url, link_obj.id)
+        # Запускаємо парсер в окремому потоці
+        run_scraper_for_link(url, link_obj.id)
         
         return jsonify(
             {
                 "id": link_obj.id,
                 "link": link_obj.link,
-                "car_type": link_obj.car_type,
+                "category": link_obj.category,
                 "owner": link_obj.owner,
                 "last_processed_at": link_obj.last_processed_at.isoformat() if link_obj.last_processed_at else None,
             }
         ), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route("/admin")
-def admin_panel():
-    """Адмін-панель зі списком авто"""
-    status = request.args.get("status", "")
-    search = request.args.get("search", "")
-    page = int(request.args.get("page", 1))
-    
-    # Отримуємо статистику
-    stats = get_statistics()
-    
-    # Отримуємо список авто
-    result = get_cars(status=status, search=search, page=page, per_page=50)
-    
-    # Читаємо HTML шаблон
-    template_path = os.path.join(os.path.dirname(__file__), "templates", "admin.html")
-    with open(template_path, "r", encoding="utf-8") as f:
-        template = f.read()
-    
-    return render_template_string(
-        template,
-        cars=result["cars"],
-        stats=stats,
-        status=status,
-        search=search,
-        page=result["page"],
-        pages=result["pages"]
-    )
-
-
-@app.route("/admin/car/<int:car_id>", methods=["GET"])
-def get_car(car_id):
-    """Отримує дані про авто для редагування"""
-    car = get_car_by_id(car_id)
-    if not car:
-        return jsonify({"error": "Car not found"}), 404
-    
-    return jsonify({
-        "id": car.id,
-        "brand": car.brand,
-        "year": car.year,
-        "price": car.price,
-        "mileage": car.mileage,
-        "fuel_type": car.fuel_type,
-        "transmission": car.transmission,
-        "color": car.color,
-        "location": car.location,
-        "description": car.description,
-        "processed_status": car.processed_status.value if car.processed_status else None,
-        "is_published": car.is_published,
-        "link_path": car.link_path,
-    })
-
-
-@app.route("/admin/car/<int:car_id>", methods=["PUT"])
-def update_car_route(car_id):
-    """Оновлює дані авто"""
-    data = request.get_json()
-    
-    try:
-        car = update_car(car_id, data)
-        if not car:
-            return jsonify({"error": "Car not found"}), 404
-        
-        return jsonify({
-            "id": car.id,
-            "brand": car.brand,
-            "message": "Car updated successfully"
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/admin/stats", methods=["GET"])
-def admin_stats():
-    """API для отримання статистики"""
-    stats = get_statistics()
-    return jsonify(stats)
-
-
-@app.route("/admin/delete-cars", methods=["POST"])
-def delete_cars_route():
-    """API для видалення авто (додає задачу в чергу)"""
-    data = request.get_json(silent=True) or {}
-    car_ids = data.get("car_ids", [])
-    link_id = data.get("link_id")
-    
-    if not car_ids and not link_id:
-        return jsonify({"error": "Either car_ids or link_id is required"}), 400
-    
-    try:
-        # Додаємо задачу в чергу видалення
-        task = delete_cars.delay(car_ids=car_ids if car_ids else None, link_id=link_id)
-        
-        return jsonify({
-            "status": "queued",
-            "task_id": task.id,
-            "message": "Deletion task added to queue"
-        }), 202
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     config = DevelopmentConfig()

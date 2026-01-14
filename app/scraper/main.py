@@ -1,181 +1,56 @@
-import sys
-import re
-import csv
 import time
-import os
-import uuid
-import requests
-import numpy as np
-import cv2
-from concurrent.futures import ThreadPoolExecutor
-from playwright.sync_api import sync_playwright, Playwright
-from .constants import cat_list
-from functions.function import *
-test_link = "https://auto.ria.com/uk/search/?search_type=1&bodystyle[0]=198&bodystyle[1]=197&bodystyle[2]=153&owner=1035383&page=0&limit=20"
-import logging
-from playwright.sync_api import Playwright, TimeoutError as PlaywrightTimeoutError, Page
-
-logger = logging.getLogger(__name__)
 import random
+import logging
+from playwright.sync_api import sync_playwright, Page
+from functions.function import save_data_to_db
+
+# --------------------------------------------------
+# LOGGING
+# --------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# --------------------------------------------------
+# CONSTANTS
+# --------------------------------------------------
+SEARCH_URL = (
+    "https://auto.ria.com/uk/search/"
+    "?search_type=1&bodystyle[0]=198&bodystyle[1]=197"
+    "&bodystyle[2]=153&owner=1035383&page=0&limit=20"
+)
+
+CAT_LIST = [
+    "descEngineEngine",
+    "descEcoStandartEcoStandart",
+    "descTransmissionTransmission",
+    "descDriveTypeDriveType",
+    "descColorColor",
+    "descConditionerValue",
+]
+
+def pause(a=0.7, b=1.8):
+    time.sleep(random.uniform(a, b))
 
 
-def human_pause(min_s=0.5, max_s=1.5):
-    time.sleep(random.uniform(min_s, max_s))
-
-
-def human_scroll(page, steps=3):
+def scroll(page: Page, steps=2):
     for _ in range(steps):
         page.mouse.wheel(0, random.randint(300, 700))
-        human_pause(0.3, 0.8)
+        pause(0.4, 0.9)
 
 
-def human_move_mouse(page):
-    x = random.randint(100, 800)
-    y = random.randint(100, 600)
-    page.mouse.move(x, y, steps=random.randint(10, 25))
-
-
-class OwnerCars:
-    def __init__(self):
-        pass
-
-
-def run(playwright: Playwright):
-    chromium = playwright.chromium
-
-    browser = chromium.launch(
-        headless=False,      # ❗ виглядати як реальний користувач
-        slow_mo=50           # ❗ уповільнення дій
+def move_mouse(page: Page):
+    page.mouse.move(
+        random.randint(100, 900),
+        random.randint(100, 600),
+        steps=random.randint(15, 30),
     )
 
-    context = browser.new_context(
-        locale="uk-UA",
-        user_agent=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        viewport={"width": 1366, "height": 768},
-    )
-
-    page = context.new_page()
-
-    SEARCH_URL = (
-        "https://auto.ria.com/uk/search/"
-        "?search_type=1&bodystyle[0]=198&bodystyle[1]=197&bodystyle[2]=153"
-        "&owner=1035383&page=0&limit=20"
-    )
-
-    print("🌐 Відкриваю search page...")
-    page.goto(
-        SEARCH_URL,
-        wait_until="domcontentloaded",
-        timeout=60000
-    )
-
-    # 🧠 дати сторінці «ожити»
-    human_pause(2, 4)
-    human_scroll(page)
-    human_move_mouse(page)
-
-    # 🍪 cookies
-    accept_cookies(page)
-
-    human_pause(2, 3)
-
-    # ===========================
-    # 1️⃣ список авто
-    # ===========================
-    auto_links = get_auto_links_from_search(page)
-
-    if not auto_links:
-        print("❌ Авто не знайдені")
-        return
-
-    # ===========================
-    # 2️⃣ парсинг авто
-    # ===========================
-    for idx, auto_url in enumerate(auto_links, start=1):
-        print(f"\n🚗 [{idx}/{len(auto_links)}] {auto_url}")
-
-        try:
-            human_pause(1.5, 3.5)
-            human_move_mouse(page)
-
-            data = get_data_by_link(page, auto_url)
-
-            if not data:
-                print("⚠️ Немає даних")
-                continue
-
-        except Exception as e:
-            print(f"❌ Помилка: {e}")
-            continue
-
-        human_pause(1.5, 2.5)
-
-    print("\n✅ Парсинг завершено")
-    input("⏸ Натисни Enter щоб закрити браузер...")
-
-    browser.close()
-# def get_list_of_link(page):
-#     links = page.locator('xpath=//*[@id="items"]//a')
-#     all_hrefs = []
-#     for i in range(links.count()):
-#         href = links.nth(i).get_attribute("href")
-#         if href:
-#             all_hrefs.append(href)
-#     return all_hrefs
-
-def get_auto_links_from_search(page) -> list[str]:
-    """
-    Забирає посилання на всі авто зі search page AutoRia
-    """
-    print("🔍 Очікую появу карток авто...")
-
-    page.wait_for_selector(
-        'a.product-card',
-        timeout=20000
-    )
-
-    cards = page.locator('a.product-card')
-    count = cards.count()
-
-    print(f"Знайдено карток: {count}")
-
-    links = []
-
-    for i in range(count):
-        href = cards.nth(i).get_attribute("href")
-
-        if not href:
-            continue
-
-        if href.startswith("/"):
-            href = "https://auto.ria.com" + href
-
-        if "/auto_" in href:
-            links.append(href)
-
-    unique_links = list(dict.fromkeys(links))
-
-    print(f"✅ Валідних авто-лінків: {len(unique_links)}")
-
-    for link in unique_links[:3]:
-        print("  →", link)
-
-    return unique_links
-
-
-def accept_cookies(page: Page) -> bool:
-    """
-    Людський та надійний клік cookie consent
-    """
+def accept_cookies(page: Page):
     try:
-        # ⏳ дати банеру зʼявитись
-        human_pause(2.0, 3.5)
-        human_move_mouse(page)
-
+        pause(2, 4)
         clicked = page.evaluate(
             """
             () => {
@@ -188,7 +63,6 @@ def accept_cookies(page: Page) -> bool:
                         XPathResult.FIRST_ORDERED_NODE_TYPE,
                         null
                     ).singleNodeValue;
-
                 if (btn) {
                     btn.click();
                     return true;
@@ -197,323 +71,289 @@ def accept_cookies(page: Page) -> bool:
             }
             """
         )
-
         if clicked:
-            print("✅ Cookie consent clicked (human-like)")
-            return True
-
-    except Exception as e:
-        print("❌ Cookie click failed:", e)
-
-    print("ℹ Cookie banner not found")
-    return False
-
-def get_data_by_link(page, link):
-    page.goto(
-        link,
-        wait_until="domcontentloaded",
-        timeout=60000
-    )
-    human_pause(2.0, 4.0)
-    human_scroll(page, steps=2)
-    human_move_mouse(page)
-    page.wait_for_load_state("networkidle")
-
-    price = page.locator('xpath=//*[@id="sidePrice"]/strong').text_content()
-    print(price, "PRICE")
-    full_title = page.locator('xpath=//*[@id="sideTitleTitle"]/span').text_content()
-    print(full_title, "FULL TITLE")
-    millage = page.locator(
-        'xpath=//*[@id="basicInfoTableMainInfo0"]/span'
-    ).text_content()
-    print(millage, "MILLAGE")
-    car_value = page.locator(
-        'xpath=//*[@id="descCharacteristicsValue"]/span'
-    ).text_content()
-    print(car_value, "CAR VALUE")
-    description = page.locator('xpath=//*[@id="col"]/div[6]/div/span').text_content()
-    print(description, "DESCRIPTION")
-    owner = page.locator('xpath=//*[@id="sellerInfoUserName"]/span').text_content()
-    print(owner, "OWNER")
-    location = page.locator(
-        'xpath=//*[@id="basicInfoTableMainInfoGeo"]/span'
-    ).text_content()
-    print(location, "LOCATION")
-
-    car_link = link
-    print(car_link, "CAR LINK")
-
-    cat = page.locator('xpath=//*[@id="descList"]//div')
-
-    cat_dict = {}
-    try:
-        for i in range(cat.count()):
-            div_id = cat.nth(i).get_attribute("id")
-            span = page.locator(f'xpath=//*[@id="{div_id}"]/span')
-            if span.count() > 0:
-                span_text = span.text_content()
-                cat_dict[div_id] = span_text
-    except Exception as e:
-        logger.error(f"Error getting cat data: {e}")
-        return None
-    images = get_images_by_width(page=page, url=link)
-    print(images, "IMAGES")
-    data = process_data(
-        price,
-        full_title,
-        millage,
-        car_value,
-        description,
-        owner,
-        location,
-        car_link,
-        cat_dict,
-        images,
-    )
-
-    save_data_to_db(data)
-    return data
-
-def download_as_array(url: str):
-    """Downloads image from URL and returns as numpy array."""
-    try:
-        time.sleep(1)
-        r = requests.get(url, timeout=15)
-        r.raise_for_status()
-        img_arr = np.frombuffer(r.content, dtype=np.uint8)
-        return cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
-    except Exception as e:
-        logger.error(f"Failed to download {url}: {e}")
-        return None
+            logger.info("Cookies rejected")
+    except Exception:
+        pass
 
 
-def generate_formatted_data(
-    image, out_path: str, template_path: str, quality: int = 85
-) -> bool:
-    """Crops image using template matching and saves to output path."""
-    if not os.path.exists(template_path):
-        logger.error(f"Template file '{template_path}' not found")
-        return False
-
-    template = cv2.imread(template_path)
-    h, w = template.shape[:2]
-    res = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-    if max_val >= 0.8:
-        y_crop = max_loc[1] + h
-        cropped = image[y_crop:, :]
-        cv2.imwrite(out_path, cropped, [cv2.IMWRITE_JPEG_QUALITY, quality])
-        logger.debug(f"Processed {os.path.basename(out_path)}")
-        return True
-    else:
-        logger.debug("Logo not found or match too low")
-        return False
-
-
-def process_images(
-    images: list, template_path: str = None, output_base: str = "car_images"
-) -> str:
-    """Processes images by cropping and saves to UUID folder, returns folder name."""
-    if not images:
-        logger.warning("No images to process")
-        return ""
-
-    if template_path is None:
-        template_path = os.path.join(os.path.dirname(__file__), "icon_test.png")
-
-    folder_name = str(uuid.uuid4())
-    output_dir = os.path.join(output_base, folder_name)
+def get_links(page: Page) -> list[str]:
+    logger.info("Waiting for search cards")
 
     try:
-        os.makedirs(output_dir, exist_ok=True)
-        logger.info(f"Created folder: '{output_dir}'")
-    except Exception as e:
-        logger.error(f"Error creating folder '{output_dir}': {e}")
-        return ""
+        # Чекаємо на картки, але не падаємо якщо їх немає
+        page.wait_for_selector("a.product-card", timeout=10000)
+    except Exception:
+        # Якщо карток немає - повертаємо порожній список
+        logger.info("No product cards found on page")
+        return []
 
-    processed_count = 0
-    for i, url in enumerate(images, 1):
-        try:
-            img = download_as_array(url)
-            if img is None:
-                continue
+    pause(1.5, 3)
+    scroll(page, 2)
 
-            out_file = f"car_{i}_no_logo.jpg"
-            out_path = os.path.join(output_dir, out_file)
+    cards = page.locator("a.product-card")
+    links = []
 
-            if generate_formatted_data(img, out_path, template_path):
-                processed_count += 1
-        except Exception as e:
-            logger.error(f"Error processing {url}: {e}")
+    for i in range(cards.count()):
+        href = cards.nth(i).get_attribute("href")
+        if not href:
+            continue
+        if href.startswith("/"):
+            href = "https://auto.ria.com" + href
+        if "/auto_" in href:
+            links.append(href)
 
-    if processed_count:
-        logger.info(f"Processed {processed_count} images in '{output_dir}'")
-        return folder_name
-    else:
-        logger.warning("No images were processed")
-        return ""
+    unique = list(dict.fromkeys(links))
+    logger.info("Found %s auto links", len(unique))
+    return unique
+
+def extract_car_values(page: Page) -> dict:
+
+    result = {}
+
+    blocks = page.locator('xpath=//*[@id="descList"]//div')
+
+    for i in range(blocks.count()):
+        block = blocks.nth(i)
+        block_id = block.get_attribute("id")
+
+        if not block_id:
+            continue
+
+        if block_id not in CAT_LIST:
+            continue
+
+        span = block.locator("span")
+        if span.count() == 0:
+            continue
+
+        value = span.first.text_content()
+        if value:
+            result[block_id] = value.strip()
+
+    logger.info("car_values parsed: %s", result)
+    return result
 
 
-def process_data(
-    price: int,
-    full_title: str,
-    millage: int,
-    car_value: str,
-    description: str,
-    owner: str,
-    location: str,
-    car_link: str,
-    cat_dict: dict,
-    images: list,
-) -> dict:
+def parse_title(title: str) -> dict:
+    """
+    Парсить title для витягнення brand та year.
+    Приклад: "DAF LF 2018" -> {"brand": "DAF", "year": 2018}
+    """
+    import re
+    result = {"brand": "Unknown", "year": 0}
+    
+    if not title:
+        return result
+    
+    # Шукаємо рік (4 цифри між 1900-2100)
+    year_match = re.search(r'\b(19|20)\d{2}\b', title)
+    if year_match:
+        result["year"] = int(year_match.group())
+    
+    # Видаляємо рік з title і беремо перше слово як brand
+    title_without_year = re.sub(r'\s*\d{4}\s*', ' ', title).strip()
+    parts = title_without_year.split()
+    if parts:
+        # Беремо перші 1-2 слова як brand (наприклад "Mercedes-Benz" або "DAF")
+        brand = parts[0]
+        if len(parts) > 1 and parts[1] in ['Benz', 'Actros', 'Axor', 'Atego']:
+            brand = f"{parts[0]}-{parts[1]}"
+        result["brand"] = brand
+    
+    return result
 
-    formatted_cat_dict = {}
-    for k, v in cat_dict.items():
-        if k in cat_list:
-            formatted_cat_dict[k] = v
 
-    path_to_images = process_images(images)
-
-    auto_params = {
-        "link": car_link,
-        "price": price,
-        "full_title": full_title,
-        "millage": millage,
-        "car_value": car_value,
-        "description": description,
-        "owner": owner,
-        "location": location,
-        "car_link": car_link,
-        "cat_dict": formatted_cat_dict,
-        "path_to_images": path_to_images,
+def extract_car_info_from_values(car_values: dict) -> dict:
+    """
+    Витягує fuel_type, transmission, color з car_values.
+    """
+    result = {
+        "fuel_type": "Unknown",
+        "transmission": "Unknown",
+        "color": None
     }
+    
+    # Fuel type з descEngineEngine (наприклад "Дизель, 6.7 л")
+    engine = car_values.get("descEngineEngine", "")
+    if engine:
+        if "Дизель" in engine or "Diesel" in engine:
+            result["fuel_type"] = "Дизель"
+        elif "Бензин" in engine or "Petrol" in engine or "Gasoline" in engine:
+            result["fuel_type"] = "Бензин"
+        elif "Газ" in engine or "Gas" in engine:
+            result["fuel_type"] = "Газ"
+        elif "Електричний" in engine or "Electric" in engine:
+            result["fuel_type"] = "Електричний"
+    
+    # Transmission з descTransmissionTransmission
+    transmission = car_values.get("descTransmissionTransmission", "")
+    if transmission:
+        result["transmission"] = transmission.strip()
+    
+    # Color з descColorColor
+    color = car_values.get("descColorColor", "")
+    if color:
+        result["color"] = color.strip()
+    
+    return result
 
-    print(auto_params, "AUTO PARAMS")
+def parse_car(page: Page, car_link: str, parent_link: str):
+    """
+    Парсить дані про авто за персональним лінком.
+    
+    Args:
+        page: Playwright page object
+        car_link: Персональний лінк авто
+        parent_link: Батьківський лінк (той що для парсингу)
+    """
+    logger.info("OPEN %s", car_link)
 
-    return auto_params
+    page.goto(car_link, wait_until="domcontentloaded", timeout=60000)
 
+    pause(2, 4)
+    scroll(page, 2)
+    move_mouse(page)
 
-def get_images_by_width(url: str, page=None, target_width: str = "100%") -> list:
-    """Extracts image URLs from a page using Playwright."""
-    browser = None
-    playwright_instance = None
-    should_close_browser = False
+    page.wait_for_selector("#sidePrice strong", timeout=20000)
+    page.wait_for_selector("#descList", timeout=20000)
 
     try:
-        if page is None:
-            playwright_instance = sync_playwright().start()
-            browser = playwright_instance.chromium.launch()
-            page = browser.new_page()
-            should_close_browser = True
+        price = page.locator("#sidePrice strong").text_content().strip()
+        title = page.locator('xpath=//*[@id="sideTitleTitle"]/span').text_content().strip()
+        mileage = page.locator("#basicInfoTableMainInfo0 span").text_content().strip()
+        location = page.locator("#basicInfoTableMainInfoGeo span").text_content().strip()
+        description = page.locator(
+            'xpath=//*[@id="descCharacteristicsValue"]/span'
+        ).text_content().strip()
 
-        if url:
-            page.goto(url)
-            page.wait_for_load_state("networkidle")
     except Exception as e:
-        logger.error(f"Error loading page {url}: {e}")
-        if browser:
-            browser.close()
-        if playwright_instance:
-            playwright_instance.stop()
-        return []
+        logger.error("FAILED base fields: %s", e)
+        # Зберігаємо запис з FAILED статусом
+        try:
+            save_data_to_db(
+                {
+                    "price": "0",
+                    "full_title": "",
+                    "mileage": "0",
+                    "location": "",
+                    "description": f"Failed to parse: {str(e)}",
+                    "car_values": {},
+                    "brand": "Unknown",
+                    "year": 0,
+                    "fuel_type": "Unknown",
+                    "transmission": "Unknown",
+                    "color": None,
+                },
+                parent_link,
+                car_link,
+            )
+        except Exception:
+            pass
+        return
 
-    required_phrase = ""
-    try:
-        phrase_locator = page.locator(
-            "xpath=/html/body/div/main/div[1]/div[3]/div[2]/div[1]/div[1]/div[1]/span"
+    car_values = extract_car_values(page)
+
+    if not car_values:
+        logger.error("car_values EMPTY - saving with FAILED status")
+        # Зберігаємо запис з FAILED статусом
+        try:
+            save_data_to_db(
+                {
+                    "price": price if "price" in locals() else "0",
+                    "full_title": title if "title" in locals() else "",
+                    "mileage": mileage if "mileage" in locals() else "0",
+                    "location": location if "location" in locals() else "",
+                    "description": (
+                        description
+                        if "description" in locals()
+                        else "car_values is empty"
+                    ),
+                    "car_values": {},
+                    "brand": "Unknown",
+                    "year": 0,
+                    "fuel_type": "Unknown",
+                    "transmission": "Unknown",
+                    "color": None,
+                },
+                parent_link,
+                car_link,
+            )
+        except Exception:
+            pass
+        return
+
+    # Парсимо title для brand та year
+    title_info = parse_title(title)
+    
+    # Витягуємо інформацію з car_values
+    car_info = extract_car_info_from_values(car_values)
+    
+    data = {
+        "price": price,
+        "full_title": title,
+        "mileage": mileage,
+        "location": location,
+        "description": description,
+        "car_values": car_values,
+        # Додаємо витягнуті дані
+        "brand": title_info["brand"],
+        "year": title_info["year"],
+        "fuel_type": car_info["fuel_type"],
+        "transmission": car_info["transmission"],
+        "color": car_info["color"],
+    }
+    
+    logger.warning("SAVE DATA car_values=%s", data["car_values"])
+    logger.info("Parsed data: brand=%s, year=%s, fuel_type=%s, transmission=%s", 
+                data["brand"], data["year"], data["fuel_type"], data["transmission"])
+    save_data_to_db(data, parent_link, car_link)
+    logger.info("SAVED %s", car_link)
+
+def run():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False, slow_mo=40)
+        context = browser.new_context(
+            locale="uk-UA",
+            viewport={"width": 1366, "height": 768},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
         )
-        if phrase_locator.count() > 0:
-            required_phrase = (phrase_locator.first.text_content() or "").strip()
-    except Exception as e:
-        logger.debug(f"Failed to extract phrase from XPath: {e}")
 
-    image_urls = []
+        page = context.new_page()
 
-    try:
-        if required_phrase:
-            containers = page.locator('li[style*="width:100%"] picture img')
-        else:
-            containers = page.locator(
-                'li[style*="width:100%"] picture img, li[style*="width:100%"] picture source'
-            )
+        logger.info("OPEN search page")
+        page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=60000)
 
-        container_count = containers.count()
+        pause(2, 4)
+        scroll(page)
+        move_mouse(page)
 
-        if container_count == 0:
-            containers = page.locator(
-                'li[style*="width:100%"] img, li[style*="width:100%"] source'
-            )
-            container_count = containers.count()
+        accept_cookies(page)
+        pause(2, 3)
 
-        if container_count == 0:
-            containers = page.locator("img, source")
-            container_count = containers.count()
+        links = get_links(page)
 
-        for i in range(container_count):
+        for i, car_link in enumerate(links, 1):
+            logger.info("CAR %s/%s", i, len(links))
             try:
-                element = containers.nth(i)
-
-                src = (
-                    element.get_attribute("src")
-                    or element.get_attribute("data-src")
-                    or element.get_attribute("srcset")
-                )
-                if not src:
-                    continue
-
-                if "," in src:
-                    src = src.split(",")[0].strip().split(" ")[0]
-
-                if required_phrase:
-                    title_attr = (
-                        element.get_attribute("title")
-                        or element.get_attribute("alt")
-                        or ""
-                    ).strip()
-                    if (
-                        not title_attr
-                        or required_phrase.lower() not in title_attr.lower()
-                    ):
-                        continue
-
-                if ("riastatic.com" in src) and ("/photosnew/auto/photo/" in src):
-                    hd_src = re.sub(r"(\d+)[a-z]+\.(webp|jpg)$", r"\1hd.jpg", src)
-                    image_urls.append(hd_src)
+                parse_car(page, car_link, SEARCH_URL)
             except Exception as e:
-                logger.debug(f"Error processing element {i}: {e}")
-                continue
+                logger.exception("CRASH on %s: %s", car_link, e)
 
-    except Exception as e:
-        logger.error(f"Error searching for images: {e}")
-        if browser:
-            browser.close()
-        if playwright_instance:
-            playwright_instance.stop()
-        return []
-    finally:
-        if browser and should_close_browser:
-            browser.close()
-        if playwright_instance and should_close_browser:
-            playwright_instance.stop()
+            pause(3, 6)
+            scroll(page, random.randint(1, 3))
 
-    image_urls = list(set(image_urls))
-    logger.info(f"Found {len(image_urls)} images")
-    return image_urls
+            if i % random.randint(5, 7) == 0:
+                logger.info("Taking a break")
+                pause(15, 25)
+
+        input("Press Enter to exit")
+        browser.close()
 
 
-def get_list_of_pages(page) -> int:
-    """Returns the number of pages by counting li elements in pagination."""
-    try:
-        pagination = page.locator('xpath=//*[@id="items"]/div[3]/nav/ul/li')
-        page_count = pagination.count()
-        return page_count if page_count > 0 else 1
-    except Exception as e:
-        logger.error(f"Error getting page count: {e}")
-        return 1
-
-def next_page(pre_page: str, next_page: str):
-    pass
-
-with sync_playwright() as playwright:
-    run(playwright)
+if __name__ == "__main__":
+    run()

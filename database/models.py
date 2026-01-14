@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from enum import Enum
-
+from sqlalchemy import Table, Column
 from database.db import Base
 
 
@@ -67,6 +67,8 @@ class Link(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     link: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    car_type: Mapped[Optional[str]] = mapped_column(String(50))  # 3-5 тон, 5-15 тон, Тягач + (категорія від користувача)
+    owner: Mapped[Optional[str]] = mapped_column(String(255))  # Власник (текст)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -78,6 +80,19 @@ class Link(Base):
         back_populates="link",
         cascade="all, delete-orphan"
     )
+
+
+class LinkToDelete(Base):
+    __tablename__ = "links_to_delete"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    link: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+
+class LinkToCreate(Base):
+    __tablename__ = "links_to_create"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    link: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
 
 class Partner(Base):
     __tablename__ = "partners"
@@ -105,9 +120,6 @@ class Partner(Base):
 
     cars_count: Mapped[int] = mapped_column(Integer, default=0)
 
-
-from sqlalchemy import Table, Column
-
 partner_cars = Table(
     "partner_cars",
     Base.metadata,
@@ -122,6 +134,12 @@ planed_tasks_cars = Table(
     Column("car_id", ForeignKey("cars.id"), primary_key=True),
 )
 
+planed_tasks_link_car=Table(
+    "link_car",
+    Base.metadata,
+    Column("link_id", ForeignKey("links.id"), primary_key=True),
+    Column("car_id", ForeignKey("cars.id"), primary_key=True),
+)
 
 class Car(Base):
     __tablename__ = "cars"
@@ -130,8 +148,7 @@ class Car(Base):
 
     link_id: Mapped[int] = mapped_column(ForeignKey("links.id"), nullable=False)
     link: Mapped["Link"] = relationship(back_populates="cars")
-
-    car_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    link_path: Mapped[str] = mapped_column(String(150), nullable=False)
     brand: Mapped[str] = mapped_column(String(50), nullable=False)
     fuel_type: Mapped[str] = mapped_column(String(50), nullable=False)
     transmission: Mapped[str] = mapped_column(String(50), nullable=False)

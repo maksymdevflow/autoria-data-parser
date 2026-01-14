@@ -2,8 +2,55 @@ from database.models import Link
 from datetime import datetime, timedelta
 from datetime import datetime, timezone
 from database.db import SessionLocal
-from database.models import Link, Car
- 
+from database.models import Link, Car, StatusProcessed
+
+from sqlalchemy.orm import Session
+from database.models import Link
+from datetime import datetime, timezone
+
+def get_or_create_link(session: Session, url: str) -> Link:
+    link = session.query(Link).filter(Link.link == url).first()
+
+    if link:
+        link.updated_at = datetime.utcnow()
+        link.last_processed_at = datetime.now(timezone.utc)
+        return link
+
+    link = Link(
+        link=url,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+        last_processed_at=datetime.now(timezone.utc),
+    )
+
+    session.add(link)
+    session.flush()  # 💥 щоб зʼявився link.id без commit
+    return link
+
+import re
+
+def parse_int(value: str | int | None) -> int:
+    """
+    Парсить число з рядка або повертає число якщо воно вже int.
+    """
+    if value is None:
+        return 0
+    
+    # Якщо вже число, повертаємо його
+    if isinstance(value, int):
+        return value
+    
+    # Якщо рядок, парсимо його
+    if isinstance(value, str):
+        digits = re.sub(r"[^\d]", "", value)
+        return int(digits) if digits else 0
+    
+    # Для інших типів намагаємося конвертувати в рядок
+    try:
+        digits = re.sub(r"[^\d]", "", str(value))
+        return int(digits) if digits else 0
+    except:
+        return 0
 
 def check_period_link_to_process():
     db = SessionLocal()
@@ -32,71 +79,121 @@ def _safe_int(value: str) -> int:
     return int(digits) if digits else 0
 
 
-def save_data_to_db(auto_params: dict) -> int:
+def save_data_to_db(data: dict, parent_link: str, car_link: str):
     """
-    Зберігає результати парсингу в БД.
-    Повертає id створеного/оновленого Car.
+    Зберігає дані про авто в БД.
+    
+    Args:
+        data: Словник з даними про авто
+        parent_link: Батьківський лінк (той що для парсингу)
+        car_link: Персональний лінк авто
     """
-    db = SessionLocal()
+    session = SessionLocal()
+
     try:
-        url = auto_params["link"]
+        # Отримуємо або створюємо батьківський лінк
+        parent_link_obj = get_or_create_link(session, parent_link)
+        
+        # Перевіряємо чи вже існує запис з цим link_path
+        existing_car = session.query(Car).filter(Car.link_path == car_link).first()
+        if existing_car:
+            # Оновлюємо існуючий запис
+            existing_car.brand = data.get("brand", "Unknown")
+            existing_car.fuel_type = data.get("fuel_type", "Unknown")
+            existing_car.transmission = data.get("transmission", "Unknown")
+            existing_car.price = parse_int(data.get("price"))
+            existing_car.year = parse_int(data.get("year"))
+            existing_car.mileage = parse_int(data.get("mileage"))
+            existing_car.color = data.get("color")
+            existing_car.location = data.get("location")
+            existing_car.car_values = data.get("car_values", {})
+            existing_car.description = data.get("description", "")
+            existing_car.processed_status = StatusProcessed.UPDATED
+            session.commit()
+            return
 
-        link_obj = db.query(Link).filter(Link.link == url).one_or_none()
-        if link_obj is None:
-            link_obj = Link(link=url, last_processed_at=datetime.now(timezone.utc))
-            db.add(link_obj)
-            db.flush()  
-        else:
-            link_obj.last_processed_at = datetime.now(timezone.utc)
+        car = Car(
+            link_id=parent_link_obj.id,
+            link_path=car_link,  # Персональний лінк авто
+            brand=data.get("brand", "Unknown"),
+            fuel_type=data.get("fuel_type", "Unknown"),
+            transmission=data.get("transmission", "Unknown"),
+            price = parse_int(data.get("price")),
+            year = parse_int(data.get("year")),
+            mileage = parse_int(data.get("mileage")),
+            color=data.get("color"),
+            location=data.get("location"),
+            source="auto_ria",
 
-        full_title = auto_params.get("full_title") or ""
-        price_raw = auto_params.get("price") or ""
-        mileage_raw = auto_params.get("millage") or ""
+            car_values=data.get("car_values", {}),
 
-        brand = (full_title.split(" ")[0] if full_title else "Unknown")[:50]
-
-        car_data = {
-            "link_id": link_obj.id,
-            "car_type": "Unknown",  # краще витягнути з cat_dict або зі сторінки
-            "brand": brand,
-            "fuel_type": "Unknown",  # теж витягнути з cat_dict
-            "transmission": "Unknown",  # теж витягнути з cat_dict
-            "price": _safe_int(price_raw),
-            "year": _safe_int(full_title),  # спроба дістати рік з title
-            "mileage": _safe_int(mileage_raw),
-            "color": None,
-            "location": (auto_params.get("location") or "")[:50] or None,
-            "source": "auto_ria",
-            "car_values": auto_params.get("cat_dict") or {},
-            "description": auto_params.get("description") or "",
-            "processed_status": None,
-            "is_published": False,
-        }
-
-        existing = (
-            db.query(Car)
-            .filter(
-                Car.link_id == link_obj.id,
-                Car.year == car_data["year"],
-                Car.price == car_data["price"],
-            )
-            .one_or_none()
+            description=data.get("description", ""),
+            is_published=False,
+            processed_status=StatusProcessed.CREATED,
         )
 
-        if existing:
-            for k, v in car_data.items():
-                setattr(existing, k, v)
-            car_obj = existing
-        else:
-            car_obj = Car(**car_data)
-            db.add(car_obj)
+        session.add(car)
+        session.commit()
 
-        db.commit()
-        db.refresh(car_obj)
-        return car_obj.id
-
-    except Exception:
-        db.rollback()
+    except Exception as e:
+        session.rollback()
+        # Спробуємо зберегти запис з FAILED статусом
+        try:
+            parent_link_obj = get_or_create_link(session, parent_link)
+            # Перевіряємо чи вже існує запис з цим link_path
+            existing_car = session.query(Car).filter(Car.link_path == car_link).first()
+            if existing_car:
+                existing_car.processed_status = StatusProcessed.FAILED
+                session.commit()
+            else:
+                # Створюємо мінімальний запис з FAILED
+                car = Car(
+                    link_id=parent_link_obj.id,
+                    link_path=car_link,
+                    brand="Unknown",
+                    fuel_type="Unknown",
+                    transmission="Unknown",
+                    price=0,
+                    year=0,
+                    mileage=0,
+                    source="auto_ria",
+                    car_values={},
+                    description=f"Error: {str(e)}",
+                    is_published=False,
+                    processed_status=StatusProcessed.DELETED,
+                )
+                session.add(car)
+                session.commit()
+        except Exception as save_error:
+            session.rollback()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save FAILED status: {save_error}")
+        finally:
+            session.close()
         raise
     finally:
-        db.close()
+        session.close()
+
+
+def period_check_link(link):
+    links_to_check=Car.objects.filter(link).only("link")
+    
+    # run scraper to get all links via link
+    # check_website_aviable_links(link)
+    
+    links_after_check=[]
+
+    for link in links_to_check:
+        if link in links_after_check:
+            links_to_check.last_processed_at=datetime.now
+        else:
+            links_to_check.last_processed_at=datetime.now
+            # STATUS TO DELETE
+
+    for link in links_after_check:
+        if link not in links_to_check:
+            # STATUS TO CREATE
+            pass
+    return
+
