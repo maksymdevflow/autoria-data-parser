@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 2002182000
+      POSTGRES_DB: truck_partner_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d truck_partner_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build: .
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app
+      FLASK_APP: web.app:app
+      DATABASE_DEVELOPMENT_URI: postgresql+psycopg2://postgres:2002182000@postgres:5432/truck_partner_db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      SECRET_KEY: KdmxJsgLzMKtO8M0JzU2Sg6ItmdReqqD
+      TRUCK_BASE_URL: https://truckmarket.com.ua
+      KEY_ID: "4"
+      USER_ID: "986"
+      COMPANY_ID: "24"
+      cat_3_5_id: "1081"
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    command: sh -c "alembic upgrade head && exec flask run --host 0.0.0.0 --port 5000"
+
+  celery_worker:
+    build: .
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app
+      DATABASE_DEVELOPMENT_URI: postgresql+psycopg2://postgres:2002182000@postgres:5432/truck_partner_db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      BACKUP_DIR: /app/backups
+      SECRET_KEY: KdmxJsgLzMKtO8M0JzU2Sg6ItmdReqqD
+      TRUCK_BASE_URL: https://truckmarket.com.ua
+      KEY_ID: "4"
+      USER_ID: "986"
+      COMPANY_ID: "24"
+      cat_3_5_id: "1081"
+    volumes:
+      - backup_data:/app/backups
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    command: celery -A tasks.config worker -Q truck_market,parent_links -l info --pool solo
+
+  celery_beat:
+    build: .
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app
+      DATABASE_DEVELOPMENT_URI: postgresql+psycopg2://postgres:2002182000@postgres:5432/truck_partner_db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      SECRET_KEY: KdmxJsgLzMKtO8M0JzU2Sg6ItmdReqqD
+      TRUCK_BASE_URL: https://truckmarket.com.ua
+      KEY_ID: "4"
+      USER_ID: "986"
+      COMPANY_ID: "24"
+      cat_3_5_id: "1081"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    command: celery -A tasks.config beat -l info
+
+volumes:
+  postgres_data:
+  backup_data:

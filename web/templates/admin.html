@@ -1,437 +1,318 @@
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Адмін-панель - Управління авто</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f5f5;
-            padding: 20px;
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header h1 {
-            font-size: 24px;
-        }
-        .nav-links {
-            display: flex;
-            gap: 15px;
-        }
-        .nav-links a {
-            color: white;
-            text-decoration: none;
-            padding: 8px 16px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-        .nav-links a:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .stat-card h3 {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        .filters {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        .filters input,
-        .filters select {
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        .filters button {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .table-container {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #333;
-        }
-        tr:hover {
-            background: #f8f9fa;
-        }
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .status-CREATED {
-            background: #d4edda;
-            color: #155724;
-        }
-        .status-UPDATED {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        .status-DELETED {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .status-NOT_PROCESSED {
-            background: #fff3cd;
-            color: #856404;
-        }
-        .btn-edit {
-            padding: 6px 12px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .pagination {
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .pagination a,
-        .pagination span {
-            padding: 8px 12px;
-            border: 1px solid #e0e0e0;
-            border-radius: 5px;
-            text-decoration: none;
-            color: #333;
-        }
-        .pagination .active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            margin: 50px auto;
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .close {
-            cursor: pointer;
-            font-size: 24px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 5px;
-        }
-        .form-group textarea {
-            min-height: 100px;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🚗 Адмін-панель - Управління авто</h1>
-        <div class="nav-links">
-            <a href="/">Головна</a>
-            <a href="/admin">Адмін</a>
-        </div>
+{% extends "base.html" %}
+{% block title %}Адмін — Авто — Autoria Parser{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Управління авто</h2>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">+ Додати посилання</a>
     </div>
-
-    <div class="stats">
-        <div class="stat-card">
-            <h3>Всього авто</h3>
-            <div class="value">{{ stats.total }}</div>
+    <div class="stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="card" style="padding: 1rem; margin: 0;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Всього</div>
+            <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);">{{ stats.total }}</div>
         </div>
-        {% for status, count in stats.by_status.items() %}
-        <div class="stat-card">
-            <h3>{{ status }}</h3>
-            <div class="value">{{ count }}</div>
+        {% for status_name, count in stats.by_status.items() %}
+        <div class="card" style="padding: 1rem; margin: 0;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">{{ status_name }}</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">{{ count }}</div>
         </div>
         {% endfor %}
     </div>
-
-    <div class="filters">
-        <input type="text" id="search" placeholder="Пошук (марка, опис, лінк)" value="{{ search or '' }}">
-        <select id="status">
+    <form method="get" action="{{ url_for('admin_panel') }}" style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+        <input type="text" name="search" placeholder="Пошук (марка, опис, посилання)" value="{{ search or '' }}" style="max-width: 280px;">
+        <select name="status" style="width: auto; min-width: 140px;">
             <option value="">Всі статуси</option>
-            <option value="CREATED" {% if status == 'CREATED' %}selected{% endif %}>CREATED</option>
-            <option value="UPDATED" {% if status == 'UPDATED' %}selected{% endif %}>UPDATED</option>
-            <option value="DELETED" {% if status == 'DELETED' %}selected{% endif %}>DELETED</option>
-            <option value="NOT_PROCESSED" {% if status == 'NOT_PROCESSED' %}selected{% endif %}>NOT_PROCESSED</option>
+            <option value="CREATED" {{ 'selected' if status == 'CREATED' else '' }}>CREATED</option>
+            <option value="ACTIVE" {{ 'selected' if status == 'ACTIVE' else '' }}>ACTIVE</option>
+            <option value="UPDATED" {{ 'selected' if status == 'UPDATED' else '' }}>UPDATED</option>
+            <option value="DELETED" {{ 'selected' if status == 'DELETED' else '' }}>DELETED</option>
+            <option value="NOT_PROCESSED" {{ 'selected' if status == 'NOT_PROCESSED' else '' }}>NOT_PROCESSED</option>
+            <option value="PROCESS" {{ 'selected' if status == 'PROCESS' else '' }}>PROCESS</option>
         </select>
-        <button onclick="applyFilters()">Фільтрувати</button>
-        <button onclick="resetFilters()">Скинути</button>
+        <button type="submit" class="btn btn-secondary">Фільтр</button>
+        <a href="{{ url_for('admin_panel') }}" class="btn btn-secondary">Скинути</a>
+    </form>
+    <div id="adminMessage" class="message" style="display: none; margin-bottom: 1rem;"></div>
+    <div id="bulkBar" style="display: none; margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-secondary, #eee); border-radius: 8px; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+        <span id="bulkCount">0 обрано</span>
+        <select id="bulkStatus" style="min-width: 140px;">
+            <option value="">— Новий статус —</option>
+            <option value="CREATED">CREATED</option>
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="UPDATED">UPDATED</option>
+            <option value="DELETED">DELETED</option>
+            <option value="NOT_PROCESSED">NOT_PROCESSED</option>
+            <option value="PROCESS">PROCESS</option>
+            <option value="FAILED">FAILED</option>
+        </select>
+        <button type="button" class="btn" id="bulkApplyBtn">Змінити статус обраних</button>
+        <button type="button" class="btn btn-danger" id="bulkDeleteBtn">Видалити обраних з сайту</button>
     </div>
-
-    <div class="table-container">
+    <div style="overflow-x: auto;">
         <table>
             <thead>
                 <tr>
+                    <th style="width: 2.5rem;"><input type="checkbox" id="selectAll" title="Обрати всі на сторінці"></th>
                     <th>ID</th>
                     <th>Марка</th>
                     <th>Рік</th>
                     <th>Ціна</th>
                     <th>Пробіг</th>
                     <th>Статус</th>
-                    <th>Опубліковано</th>
-                    <th>Дата створення</th>
+                    <th>truck_car_id</th>
+                    <th>Дата</th>
                     <th>Дії</th>
                 </tr>
             </thead>
             <tbody>
                 {% for car in cars %}
-                <tr>
+                <tr data-car-id="{{ car.id }}" data-truck-car-id="{{ car.truck_car_id or '' }}" data-car-label="{{ (car.brand ~ ' ' ~ car.year)|e }}">
+                    <td><input type="checkbox" class="car-checkbox" value="{{ car.id }}" aria-label="Обрати авто {{ car.id }}"></td>
                     <td>{{ car.id }}</td>
                     <td>{{ car.brand }}</td>
                     <td>{{ car.year }}</td>
                     <td>{{ "{:,}".format(car.price) }} $</td>
                     <td>{{ "{:,}".format(car.mileage) }} км</td>
                     <td>
-                        <span class="status-badge status-{{ car.processed_status.value if car.processed_status else 'NOT_PROCESSED' }}">
+                        <span class="badge badge-{{ car.processed_status.value if car.processed_status else 'pending' }}">
                             {{ car.processed_status.value if car.processed_status else 'NOT_PROCESSED' }}
                         </span>
                     </td>
-                    <td>
-                        {% if car.is_published %}
-                            ✅
-                        {% else %}
-                            ❌
-                        {% endif %}
-                    </td>
+                    <td>{{ car.truck_car_id or '—' }}</td>
                     <td>{{ car.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                     <td>
-                        <button class="btn-edit" onclick="editCar({{ car.id }})">Редагувати</button>
+                        <div class="action-buttons">
+                            <button type="button" class="btn btn-sm" onclick="editCar({{ car.id }})">Редагувати</button>
+                            {% if car.truck_car_id and car.processed_status and car.processed_status.value != 'deleted' %}
+                            <button type="button" class="btn btn-sm btn-danger" onclick="sendToDelete(this)">Видалити з сайту</button>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
+                {% else %}
+                <tr><td colspan="10" style="color: var(--text-muted);">Немає авто</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-
     {% if pages > 1 %}
     <div class="pagination">
         {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if status %}&status={{ status }}{% endif %}{% if search %}&search={{ search }}{% endif %}">← Попередня</a>
+        <a href="?page={{ page - 1 }}{% if status %}&status={{ status }}{% endif %}{% if search %}&search={{ search }}{% endif %}">← Назад</a>
         {% endif %}
-        <span class="active">{{ page }} / {{ pages }}</span>
+        <span class="current">{{ page }} / {{ pages }}</span>
         {% if page < pages %}
-        <a href="?page={{ page + 1 }}{% if status %}&status={{ status }}{% endif %}{% if search %}&search={{ search }}{% endif %}">Наступна →</a>
+        <a href="?page={{ page + 1 }}{% if status %}&status={{ status }}{% endif %}{% if search %}&search={{ search }}{% endif %}">Далі →</a>
         {% endif %}
     </div>
     {% endif %}
+</div>
 
-    <!-- Modal для редагування -->
-    <div id="editModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Редагувати авто</h2>
-                <span class="close" onclick="closeModal()">&times;</span>
-            </div>
-            <form id="editForm" onsubmit="saveCar(event)">
-                <input type="hidden" id="car_id" name="car_id">
-                <div class="form-group">
-                    <label>Марка:</label>
-                    <input type="text" id="brand" name="brand" required>
-                </div>
-                <div class="form-group">
-                    <label>Рік:</label>
-                    <input type="number" id="year" name="year" required>
-                </div>
-                <div class="form-group">
-                    <label>Ціна ($):</label>
-                    <input type="number" id="price" name="price" required>
-                </div>
-                <div class="form-group">
-                    <label>Пробіг (км):</label>
-                    <input type="number" id="mileage" name="mileage" required>
-                </div>
-                <div class="form-group">
-                    <label>Тип палива:</label>
-                    <input type="text" id="fuel_type" name="fuel_type" required>
-                </div>
-                <div class="form-group">
-                    <label>Коробка передач:</label>
-                    <input type="text" id="transmission" name="transmission" required>
-                </div>
-                <div class="form-group">
-                    <label>Колір:</label>
-                    <input type="text" id="color" name="color">
-                </div>
-                <div class="form-group">
-                    <label>Локація:</label>
-                    <input type="text" id="location" name="location">
-                </div>
-                <div class="form-group">
-                    <label>Опис:</label>
-                    <textarea id="description" name="description" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Статус:</label>
-                    <select id="processed_status" name="processed_status">
-                        <option value="CREATED">CREATED</option>
-                        <option value="UPDATED">UPDATED</option>
-                        <option value="DELETED">DELETED</option>
-                        <option value="NOT_PROCESSED">NOT_PROCESSED</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="is_published" name="is_published"> Опубліковано
-                    </label>
-                </div>
-                <button type="submit" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Зберегти</button>
-            </form>
+<div id="editModal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card" style="max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">Редагувати авто</h2>
+            <button type="button" class="btn btn-secondary" onclick="closeModal()" style="padding: 0.4rem 0.8rem;">×</button>
         </div>
+        <form id="editForm" onsubmit="saveCar(event)">
+            <input type="hidden" id="car_id" name="car_id">
+            <div class="form-group">
+                <label>Марка</label>
+                <input type="text" id="brand" name="brand" required>
+            </div>
+            <div class="form-group">
+                <label>Рік</label>
+                <input type="number" id="year" name="year" required>
+            </div>
+            <div class="form-group">
+                <label>Ціна ($)</label>
+                <input type="number" id="price" name="price" required>
+            </div>
+            <div class="form-group">
+                <label>Пробіг (км)</label>
+                <input type="number" id="mileage" name="mileage" required>
+            </div>
+            <div class="form-group">
+                <label>Тип палива</label>
+                <input type="text" id="fuel_type" name="fuel_type" required>
+            </div>
+            <div class="form-group">
+                <label>Коробка передач</label>
+                <input type="text" id="transmission" name="transmission" required>
+            </div>
+            <div class="form-group">
+                <label>Колір</label>
+                <input type="text" id="color" name="color">
+            </div>
+            <div class="form-group">
+                <label>Локація</label>
+                <input type="text" id="location" name="location">
+            </div>
+            <div class="form-group">
+                <label>Опис</label>
+                <textarea id="description" name="description" rows="4" required></textarea>
+            </div>
+            <div class="form-group">
+                <label>Статус</label>
+                <select id="processed_status" name="processed_status">
+                    <option value="CREATED">CREATED</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="UPDATED">UPDATED</option>
+                    <option value="DELETED">DELETED</option>
+                    <option value="NOT_PROCESSED">NOT_PROCESSED</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="is_published" name="is_published" style="width: auto;">
+                    Опубліковано
+                </label>
+            </div>
+            <button type="submit" class="btn">Зберегти</button>
+        </form>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        function applyFilters() {
-            const search = document.getElementById('search').value;
-            const status = document.getElementById('status').value;
-            let url = '/admin?';
-            if (status) url += 'status=' + status + '&';
-            if (search) url += 'search=' + encodeURIComponent(search);
-            window.location.href = url;
-        }
-
-        function resetFilters() {
-            window.location.href = '/admin';
-        }
-
-        async function editCar(carId) {
-            const response = await fetch(`/admin/car/${carId}`);
-            const car = await response.json();
-            
+{% block extra_css %}
+<style>
+.action-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.btn-sm { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+.btn-danger { background: var(--error, #ef4444); color: white; }
+.btn-danger:hover { background: #dc2626; }
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>
+function showAdminMessage(text, isError) {
+    var el = document.getElementById('adminMessage');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'message ' + (isError ? 'error' : 'success');
+    el.style.display = 'block';
+}
+function sendToDelete(btn) {
+    var row = btn.closest('tr');
+    var carId = row.getAttribute('data-car-id');
+    var label = row.getAttribute('data-car-label') || ('#' + carId);
+    if (!confirm('Відправити авто «' + label + '» в чергу на видалення з сайту? Celery видалить оголошення на TruckMarket.')) return;
+    fetch('/admin/car/' + carId + '/send-to-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            showAdminMessage(data.error || data.message, !!data.error);
+            if (!data.error) setTimeout(function() { location.reload(); }, 1500);
+        })
+        .catch(function(e) {
+            showAdminMessage('Помилка: ' + e.message, true);
+        });
+}
+function applyFilters() {
+    const form = document.querySelector('form[action="{{ url_for("admin_panel") }}"]');
+    if (form) form.submit();
+}
+function editCar(carId) {
+    fetch('/admin/car/' + carId)
+        .then(r => r.json())
+        .then(car => {
             document.getElementById('car_id').value = car.id;
-            document.getElementById('brand').value = car.brand;
-            document.getElementById('year').value = car.year;
-            document.getElementById('price').value = car.price;
-            document.getElementById('mileage').value = car.mileage;
-            document.getElementById('fuel_type').value = car.fuel_type;
-            document.getElementById('transmission').value = car.transmission;
+            document.getElementById('brand').value = car.brand || '';
+            document.getElementById('year').value = car.year || '';
+            document.getElementById('price').value = car.price || '';
+            document.getElementById('mileage').value = car.mileage || '';
+            document.getElementById('fuel_type').value = car.fuel_type || '';
+            document.getElementById('transmission').value = car.transmission || '';
             document.getElementById('color').value = car.color || '';
             document.getElementById('location').value = car.location || '';
-            document.getElementById('description').value = car.description;
+            document.getElementById('description').value = car.description || '';
             document.getElementById('processed_status').value = car.processed_status || 'NOT_PROCESSED';
-            document.getElementById('is_published').checked = car.is_published;
-            
-            document.getElementById('editModal').style.display = 'block';
-        }
+            document.getElementById('is_published').checked = !!car.is_published;
+            document.getElementById('editModal').style.display = 'flex';
+        });
+}
+function closeModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+function saveCar(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = Object.fromEntries(new FormData(form));
+    fetch('/admin/car/' + data.car_id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.ok ? (alert('Збережено'), location.reload()) : alert('Помилка'));
+}
+document.getElementById('editModal').addEventListener('click', function(ev) {
+    if (ev.target === this) closeModal();
+});
 
-        function closeModal() {
-            document.getElementById('editModal').style.display = 'none';
-        }
+(function() {
+    var bulkBar = document.getElementById('bulkBar');
+    var bulkCount = document.getElementById('bulkCount');
+    var bulkStatus = document.getElementById('bulkStatus');
+    var bulkApplyBtn = document.getElementById('bulkApplyBtn');
+    var selectAll = document.getElementById('selectAll');
+    var checkboxes = document.querySelectorAll('.car-checkbox');
 
-        async function saveCar(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            const data = Object.fromEntries(formData);
-            
-            const response = await fetch(`/admin/car/${data.car_id}`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-            
-            if (response.ok) {
-                alert('Авто успішно оновлено!');
-                location.reload();
-            } else {
-                alert('Помилка при оновленні авто');
-            }
-        }
+    function updateBulkBar() {
+        var n = document.querySelectorAll('.car-checkbox:checked').length;
+        bulkCount.textContent = n + ' обрано';
+        bulkBar.style.display = n ? 'flex' : 'none';
+    }
+    selectAll && selectAll.addEventListener('change', function() {
+        checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+        updateBulkBar();
+    });
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateBulkBar);
+    });
 
-        window.onclick = function(event) {
-            const modal = document.getElementById('editModal');
-            if (event.target == modal) {
-                closeModal();
-            }
-        }
-    </script>
-</body>
-</html>
+    bulkApplyBtn && bulkApplyBtn.addEventListener('click', function() {
+        var ids = Array.from(document.querySelectorAll('.car-checkbox:checked')).map(function(cb) { return parseInt(cb.value, 10); });
+        var status = (bulkStatus && bulkStatus.value) || '';
+        if (!ids.length) { alert('Оберіть хоча б одне авто'); return; }
+        if (!status) { alert('Оберіть новий статус'); return; }
+        bulkApplyBtn.disabled = true;
+        fetch('{{ url_for("bulk_update_status_route") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ car_ids: ids, processed_status: status })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { alert(data.error); return; }
+            document.getElementById('adminMessage').style.display = 'block';
+            document.getElementById('adminMessage').className = 'message success';
+            document.getElementById('adminMessage').textContent = data.message || 'Оновлено';
+            location.reload();
+        })
+        .catch(function(e) { alert('Помилка: ' + e.message); })
+        .finally(function() { bulkApplyBtn.disabled = false; });
+    });
 
+    var bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    bulkDeleteBtn && bulkDeleteBtn.addEventListener('click', function() {
+        var ids = Array.from(document.querySelectorAll('.car-checkbox:checked')).map(function(cb) { return parseInt(cb.value, 10); });
+        if (!ids.length) { alert('Оберіть хоча б одне авто'); return; }
+        if (!confirm('Додати ' + ids.length + ' авто в чергу на видалення з сайту (TruckMarket)? Celery видалить їх з сайту у фоні.')) return;
+        bulkDeleteBtn.disabled = true;
+        fetch('{{ url_for("bulk_send_to_delete") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ car_ids: ids })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { alert(data.error); return; }
+            document.getElementById('adminMessage').style.display = 'block';
+            document.getElementById('adminMessage').className = 'message success';
+            document.getElementById('adminMessage').textContent = data.message || 'Додано в чергу';
+            location.reload();
+        })
+        .catch(function(e) { alert('Помилка: ' + e.message); })
+        .finally(function() { bulkDeleteBtn.disabled = false; });
+    });
+})();
+</script>
+{% endblock %}

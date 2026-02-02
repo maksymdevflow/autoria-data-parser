@@ -1,0 +1,29 @@
+# Приклад конфігурації nginx для localserver.fincar.com.ua.
+# Flask (docker-compose web) слухає порт 5000; мапінг у compose: "5000:5000".
+# Скопіюй у /etc/nginx/sites-available/ (або sites-enabled) і зміни порт у proxy_pass якщо використовуєш інший WEB_PORT.
+
+server {
+    listen 80;
+    server_name localserver.fincar.com.ua;
+
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name localserver.fincar.com.ua;
+
+    ssl_certificate     /etc/letsencrypt/live/localserver.fincar.com.ua/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/localserver.fincar.com.ua/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}

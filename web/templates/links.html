@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Посилання — Autoria Parser{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Посилання по власнику</h2>
+        <a href="{{ url_for('index') }}" class="btn">+ Додати посилання</a>
+    </div>
+    <form method="get" action="{{ url_for('links_list') }}" style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+        <select name="parse_status" style="width: auto; min-width: 140px;">
+            <option value="">Всі статуси</option>
+            <option value="pending" {{ 'selected' if (parse_status or '')|lower == 'pending' else '' }}>PENDING</option>
+            <option value="parsed" {{ 'selected' if (parse_status or '')|lower == 'parsed' else '' }}>PARSED</option>
+        </select>
+        <button type="submit" class="btn btn-secondary">Фільтр</button>
+        <button type="button" class="btn btn-secondary" id="runParseToCreate" style="margin-left: 0.5rem;">Запустити парсер to_create</button>
+    </form>
+    <div id="parseToCreateMessage" class="message" style="display: none; margin-bottom: 1rem;"></div>
+    <div id="linksMessage" class="message" style="display: none; margin-bottom: 1rem;"></div>
+
+    {% for group in groups %}
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+            <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Власник</span>
+            <div style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-top: 0.25rem;">{{ group.owner }}</div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>URL</th>
+                        <th>Категорія</th>
+                        <th>Статус</th>
+                        <th>Остання обробка</th>
+                        <th>Остання перевірка</th>
+                        <th title="Планова перевірка to_create / to_delete цього тижня">Цього тижня</th>
+                        <th>Дії</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for link in group.links %}
+                    <tr data-link-id="{{ link.id }}" data-link-url="{{ link.link|e }}">
+                        <td>{{ link.id }}</td>
+                        <td>
+                            <a href="{{ url_for('link_detail', link_id=link.id) }}" style="color: var(--accent); text-decoration: none; max-width: 260px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Відкрити деталі: авто, to create, to delete">{{ link.link }}</a>
+                            <a href="{{ link.link }}" target="_blank" rel="noopener" style="margin-left: 0.35rem; color: var(--text-muted); text-decoration: none; font-size: 0.85rem;" title="Відкрити посилання в новій вкладці">↗</a>
+                        </td>
+                        <td>{{ link.car_type or '—' }}</td>
+                        <td><span class="badge badge-{{ (link.parse_status.value if link.parse_status else 'PENDING')|lower }}">{{ link.parse_status.value if link.parse_status else 'PENDING' }}</span></td>
+                        <td>{{ link.last_processed_at.strftime('%d.%m.%Y %H:%M') if link.last_processed_at else '—' }}</td>
+                        <td>{{ link.last_recheck_at.strftime('%d.%m.%Y %H:%M') if link.last_recheck_at else '—' }}</td>
+                        <td>
+                            {% if link.last_recheck_at and week_start_utc and link.last_recheck_at >= week_start_utc %}
+                            <span class="recheck-ok" title="Планова перевірка to_create/to_delete пройшла цього тижня">✓</span>
+                            {% else %}
+                            <span class="recheck-pending" title="Ще не було перевірки цього тижня">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-danger btn-delete-link" data-link-id="{{ link.id }}">Видалити посилання</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <p style="color: var(--text-muted);">Немає посилань</p>
+    {% endfor %}
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+.btn-sm { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+.btn-danger { background: var(--error, #ef4444); color: white; }
+.btn-danger:hover { background: #dc2626; }
+.recheck-ok { color: var(--success, #22c55e); font-weight: bold; font-size: 1.1rem; }
+.recheck-pending { color: var(--text-muted); }
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+    var LOG = {
+        filter: function(status) { console.log('[Links] Filter applied:', status || 'all'); },
+        parseToCreateStart: function() { console.log('[Links] Parse to create: started'); },
+        parseToCreateDone: function(ok, taskId) { console.log('[Links] Parse to create: ' + (ok ? 'OK' : 'error') + (taskId ? ' task=' + taskId : '')); },
+        deleteLinkStart: function(linkId) { console.log('[Links] Delete link: started, linkId=' + linkId); },
+        deleteLinkDone: function(linkId, ok) { console.log('[Links] Delete link: linkId=' + linkId + ' ' + (ok ? 'OK' : 'error')); }
+    };
+
+    var form = document.querySelector('form[action="{{ url_for("links_list") }}"]');
+    if (form) form.addEventListener('submit', function() { LOG.filter(new FormData(form).get('parse_status')); });
+
+    document.getElementById('runParseToCreate').addEventListener('click', function() {
+        var btn = this;
+        var msg = document.getElementById('parseToCreateMessage');
+        btn.disabled = true;
+        msg.style.display = 'none';
+        LOG.parseToCreateStart();
+        fetch('{{ url_for("run_parse_to_create") }}', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var ok = !data.error;
+                LOG.parseToCreateDone(ok, data.task_id);
+                msg.style.display = 'block';
+                msg.className = 'message ' + (data.error ? 'error' : 'success');
+                msg.textContent = data.error || (data.message || 'OK') + (data.task_id ? ' (task: ' + data.task_id + ')' : '');
+            })
+            .catch(function(e) {
+                LOG.parseToCreateDone(false);
+                msg.style.display = 'block';
+                msg.className = 'message error';
+                msg.textContent = 'Помилка: ' + e.message;
+            })
+            .finally(function() { btn.disabled = false; });
+    });
+
+document.querySelectorAll('.btn-delete-link').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var linkId = this.getAttribute('data-link-id');
+        var row = this.closest('tr');
+        var url = row ? row.getAttribute('data-link-url') : '';
+        if (!confirm('Видалити це посилання?\n\nПосилання буде поставлено в чергу: Celery видалить авто з сайту (TruckMarket) і посилання з БД у фоні. Дію не можна скасувати.')) return;
+        LOG.deleteLinkStart(linkId);
+        var msg = document.getElementById('linksMessage');
+        msg.style.display = 'none';
+        this.disabled = true;
+        fetch('/links/' + linkId + '/send-to-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                LOG.deleteLinkDone(linkId, !data.error);
+                msg.style.display = 'block';
+                msg.className = 'message ' + (data.error ? 'error' : 'success');
+                msg.textContent = data.error || data.message + (data.task_id ? ' (task: ' + data.task_id + ')' : '');
+                if (!data.error) setTimeout(function() { location.reload(); }, 1500);
+            })
+            .catch(function(e) {
+                LOG.deleteLinkDone(linkId, false);
+                msg.style.display = 'block';
+                msg.className = 'message error';
+                msg.textContent = 'Помилка: ' + e.message;
+            })
+            .finally(function() { if (btn) btn.disabled = false; });
+    });
+});
+})();
+</script>
+{% endblock %}

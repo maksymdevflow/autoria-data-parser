@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Додати посилання — Autoria Parser{% endblock %}
+{% block content %}
+<div class="upload-card card">
+    <div class="upload-header">
+        <span class="upload-icon" aria-hidden="true">⊕</span>
+        <h2>Додати посилання</h2>
+        <p class="upload-desc">URL додасться в чергу: посилання на авто потраплять у «to create», парсер збере їх у БД (3–6 ранку).</p>
+    </div>
+    {% if message and message_type == 'error' %}
+    <div class="message error">{{ message }}</div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('upload_link') }}" class="upload-form">
+        <div class="form-group">
+            <label for="link">URL посилання</label>
+            <input type="url" id="link" name="link" placeholder="https://auto.ria.com/uk/search/..." required value="{{ request.form.link or '' }}" autocomplete="url">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="category">Категорія</label>
+                <select id="category" name="category" required>
+                    <option value="">Оберіть категорію</option>
+                    <option value="3-5 тон" {{ 'selected' if request.form.category == '3-5 тон' else '' }}>3-5 тон</option>
+                    <option value="5-15 тон" {{ 'selected' if request.form.category == '5-15 тон' else '' }}>5-15 тон</option>
+                    <option value="Тягач +" {{ 'selected' if request.form.category == 'Тягач +' else '' }}>Тягач +</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="owner">Власник <span class="optional">(необовʼязково)</span></label>
+                <input type="text" id="owner" name="owner" placeholder="Назва власника" value="{{ request.form.owner or '' }}">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-upload">Додати в чергу</button>
+    </form>
+</div>
+
+{% if message and message_type == 'success' %}
+<div id="toast" class="toast toast-success" role="alert">
+    <span class="toast-icon">✓</span>
+    <span class="toast-text">{{ message }}</span>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.upload-card {
+    max-width: 520px;
+    padding: 2rem;
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+.upload-header {
+    margin-bottom: 1.75rem;
+}
+.upload-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    background: linear-gradient(135deg, var(--accent) 0%, #6d28d9 100%);
+    color: white;
+    border-radius: 12px;
+    font-size: 1.5rem;
+    font-weight: 300;
+    margin-bottom: 1rem;
+    line-height: 1;
+}
+.upload-header h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: var(--text);
+}
+.upload-desc {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+.upload-form .form-group {
+    margin-bottom: 1.25rem;
+}
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+@media (max-width: 520px) {
+    .form-row { grid-template-columns: 1fr; }
+}
+.optional {
+    font-weight: normal;
+    color: var(--text-muted);
+    font-size: 0.8em;
+}
+.btn-upload {
+    width: 100%;
+    padding: 0.85rem 1.25rem;
+    font-size: 1rem;
+    margin-top: 0.5rem;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent) 0%, #6d28d9 100%);
+}
+.btn-upload:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+}
+
+.toast {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    max-width: 360px;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+    z-index: 9999;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    animation: toast-in 0.35s ease-out;
+}
+.toast-success {
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.95) 0%, rgba(21, 128, 61, 0.95) 100%);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+.toast-icon {
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: rgba(255,255,255,0.25);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+.toast-text { flex: 1; }
+.toast.toast-hide {
+    animation: toast-out 0.3s ease-in forwards;
+}
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(1.5rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+@keyframes toast-out {
+    to {
+        opacity: 0;
+        transform: translateX(1.5rem);
+    }
+}
+</style>
+{% endblock %}
+{% block extra_js %}
+{% if message and message_type == 'success' %}
+<script>
+(function() {
+    var toast = document.getElementById('toast');
+    if (toast) {
+        setTimeout(function() {
+            toast.classList.add('toast-hide');
+            setTimeout(function() {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 320);
+        }, 4200);
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}

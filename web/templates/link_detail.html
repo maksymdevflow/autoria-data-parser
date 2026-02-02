@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Посилання {{ link.id }} — Autoria Parser{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="margin-bottom: 1rem;">
+        <a href="{{ url_for('links_list') }}" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">← Назад до посилань</a>
+    </div>
+    <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Посилання</div>
+        <a href="{{ link.link }}" target="_blank" rel="noopener" style="color: var(--accent); word-break: break-all;">{{ link.link }}</a>
+        <div style="margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+            <span>Власник: <strong>{{ link.owner or '—' }}</strong></span>
+            <span>Категорія: <strong>{{ link.car_type or '—' }}</strong></span>
+            <span class="badge badge-{{ (link.parse_status.value if link.parse_status else 'PENDING')|lower }}">{{ link.parse_status.value if link.parse_status else 'PENDING' }}</span>
+            <span style="color: var(--text-muted);">Остання перевірка (to_create/to_delete): <strong>{{ link.last_recheck_at.strftime('%d.%m.%Y %H:%M') if link.last_recheck_at else '—' }}</strong></span>
+            {% if link.last_recheck_at and week_start_utc and link.last_recheck_at >= week_start_utc %}
+            <span style="color: var(--success, #22c55e); font-weight: 600;" title="Планова перевірка цього тижня пройшла">✓ Цього тижня</span>
+            {% else %}
+            <span style="color: var(--text-muted);" title="Ще не було перевірки цього тижня">Цього тижня —</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab-headers" role="tablist">
+            <button type="button" class="tab-btn active" role="tab" data-tab="cars" aria-selected="true">Авто ({{ link.cars|length }})</button>
+            <button type="button" class="tab-btn" role="tab" data-tab="to-create" aria-selected="false">To create ({{ link.links_to_create|length }})</button>
+            <button type="button" class="tab-btn" role="tab" data-tab="to-delete" aria-selected="false">To delete ({{ link.links_to_delete|length }})</button>
+        </div>
+
+        <div id="tab-cars" class="tab-panel" role="tabpanel">
+            <div style="overflow-x: auto;">
+                {% if link.cars %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Бренд / Модель</th>
+                            <th>Рік</th>
+                            <th>Ціна</th>
+                            <th>Пробіг</th>
+                            <th>Статус</th>
+                            <th>truck_car_id</th>
+                            <th>Дія</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for car in link.cars %}
+                        <tr>
+                            <td>{{ car.id }}</td>
+                            <td>{{ car.brand }}{% if car.model %} {{ car.model }}{% endif %}</td>
+                            <td>{{ car.year }}</td>
+                            <td>{{ car.price }}</td>
+                            <td>{{ car.mileage }}</td>
+                            <td><span class="badge badge-{{ (car.processed_status.value if car.processed_status else 'not_processed')|lower }}">{{ car.processed_status.value if car.processed_status else '—' }}</span></td>
+                            <td>{{ car.truck_car_id or '—' }}</td>
+                            <td><a href="{{ url_for('admin_panel') }}?search={{ car.id }}" class="btn btn-sm btn-secondary">В адмін</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: var(--text-muted);">Немає авто по цьому посиланню.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="tab-to-create" class="tab-panel hidden" role="tabpanel">
+            <div style="overflow-x: auto;">
+                {% if link.links_to_create %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>URL авто</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lt in link.links_to_create %}
+                        <tr>
+                            <td>{{ lt.id }}</td>
+                            <td><a href="{{ lt.link }}" target="_blank" rel="noopener" style="color: var(--accent); word-break: break-all;">{{ lt.link }}</a></td>
+                            <td><span class="badge badge-{{ (lt.status.value if lt.status else 'process')|lower }}">{{ lt.status.value if lt.status else 'process' }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: var(--text-muted);">Немає записів у to create.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="tab-to-delete" class="tab-panel hidden" role="tabpanel">
+            <div style="overflow-x: auto;">
+                {% if link.links_to_delete %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>URL авто</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lt in link.links_to_delete %}
+                        <tr>
+                            <td>{{ lt.id }}</td>
+                            <td><a href="{{ lt.link }}" target="_blank" rel="noopener" style="color: var(--accent); word-break: break-all;">{{ lt.link }}</a></td>
+                            <td><span class="badge badge-{{ (lt.status.value if lt.status else 'process')|lower }}">{{ lt.status.value if lt.status else 'process' }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: var(--text-muted);">Немає записів у to delete.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+.tab-headers { display: flex; gap: 0.25rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.tab-btn {
+    padding: 0.6rem 1rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+.tab-panel.hidden { display: none; }
+.btn-sm { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+.badge-process { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+.badge-completed { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.badge-not_processed { background: rgba(161, 161, 170, 0.2); color: var(--text-muted); }
+.badge-updated { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+    var headers = document.querySelectorAll('.tab-btn');
+    var panels = document.querySelectorAll('.tab-panel');
+    headers.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tab = this.getAttribute('data-tab');
+            headers.forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+            panels.forEach(function(p) { p.classList.add('hidden'); });
+            this.classList.add('active');
+            this.setAttribute('aria-selected', 'true');
+            var panel = document.getElementById('tab-' + tab);
+            if (panel) { panel.classList.remove('hidden'); }
+        });
+    });
+})();
+</script>
+{% endblock %}

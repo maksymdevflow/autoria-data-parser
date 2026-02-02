@@ -9,31 +9,12 @@ from sqlalchemy import (
     ForeignKey,
     Enum as SAEnum,
 )
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import TypeDecorator
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import Table, Column
 from database.db import Base
-
-
-class Role(Enum):
-    ADMIN = "admin"
-    USER = "user"
-    MANAGER = "manager"
-
-
-class Status(Enum):
-    WAITING = "waiting"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class StatusPartner(Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    BLOCKED = "blocked"
-    DELETED = "deleted"
 
 
 class StatusProcessed(Enum):
@@ -41,25 +22,106 @@ class StatusProcessed(Enum):
     CREATED = "created"
     UPDATED = "updated"
     NOT_PROCESSED = "not_processed"
+    ACTIVE = "active"
+    PROCESS = "process"  # в процесі відправки на TruckMarket
+    FAILED = "failed"  # не вдалося спарсити — відправити в links_to_delete
 
 
-class User(Base):
-    __tablename__ = "users"
+class StatusProcessedType(TypeDecorator):
+    """БД statusprocessed: всі значення в lowercase."""
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    password: Mapped[str] = mapped_column(String(255), nullable=False)
-
-    role: Mapped[Role] = mapped_column(SAEnum(Role), nullable=False)
-
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    impl = postgresql.ENUM(
+        "deleted", "created", "updated", "not_processed", "active", "process", "failed",
+        name="statusprocessed"
     )
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, StatusProcessed):
+            return value.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        s = (value or "").strip().lower()
+        if s == "process":
+            return StatusProcessed.PROCESS
+        if s == "failed":
+            return StatusProcessed.FAILED
+        if s == "deleted":
+            return StatusProcessed.DELETED
+        if s == "created":
+            return StatusProcessed.CREATED
+        if s == "updated":
+            return StatusProcessed.UPDATED
+        if s == "not_processed":
+            return StatusProcessed.NOT_PROCESSED
+        if s == "active":
+            return StatusProcessed.ACTIVE
+        return None
+
+
+class StatusLinkChange(Enum):
+    PROCESS = "process"
+    COMPLETED = "completed"
+
+
+class StatusLinkChangeType(TypeDecorator):
+    """БД statuslinkchange: значення зберігаються як lowercase (process, completed) для збігу з PostgreSQL enum."""
+
+    impl = postgresql.ENUM("process", "completed", name="statuslinkchange")
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, StatusLinkChange):
+            return value.value  # 'process' або 'completed'
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        s = (value or "").strip().lower()
+        if s == "process":
+            return StatusLinkChange.PROCESS
+        if s == "completed":
+            return StatusLinkChange.COMPLETED
+        return None
+
+
+class LinkParseStatus(Enum):
+    """Статус парсингу лінка: ще не парсили / вже спарсили."""
+
+    PENDING = "pending"
+    PARSED = "parsed"
+
+
+class LinkParseStatusType(TypeDecorator):
+    """БД очікує 'pending'/'parsed' (lowercase). При записі завжди відправляємо lowercase; при читанні приймаємо обидва регістри."""
+
+    impl = postgresql.ENUM("pending", "parsed", name="linkparsestatus")
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, LinkParseStatus):
+            return value.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, LinkParseStatus):
+            return value
+        s = (value or "").strip().lower()
+        if s == "parsed":
+            return LinkParseStatus.PARSED
+        return LinkParseStatus.PENDING
 
 
 class Link(Base):
@@ -67,7 +129,9 @@ class Link(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     link: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    car_type: Mapped[Optional[str]] = mapped_column(String(50))  # 3-5 тон, 5-15 тон, Тягач + (категорія від користувача)
+    car_type: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # 3-5 тон, 5-15 тон, Тягач + (категорія від користувача)
     owner: Mapped[Optional[str]] = mapped_column(String(255))  # Власник (текст)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -75,71 +139,51 @@ class Link(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
     last_processed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    
+    last_recheck_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )  # Остання планова перевірка to_create/to_delete (понеділок)
+    parse_status: Mapped[LinkParseStatus] = mapped_column(
+        LinkParseStatusType(), nullable=False, default=LinkParseStatus.PENDING
+    )
+
     cars: Mapped[List["Car"]] = relationship(
-        back_populates="link",
-        cascade="all, delete-orphan"
+        back_populates="link", cascade="all, delete-orphan"
+    )
+
+    # Дочірні таблиці для відстеження змін по лінках
+    links_to_delete: Mapped[List["LinkToDelete"]] = relationship(
+        "LinkToDelete",
+        back_populates="parent_link",
+        cascade="all, delete-orphan",
+    )
+    links_to_create: Mapped[List["LinkToCreate"]] = relationship(
+        "LinkToCreate",
+        back_populates="parent_link",
+        cascade="all, delete-orphan",
     )
 
 
 class LinkToDelete(Base):
     __tablename__ = "links_to_delete"
     id: Mapped[int] = mapped_column(primary_key=True)
+    parent_link_id: Mapped[int] = mapped_column(ForeignKey("links.id"), nullable=False)
+    parent_link: Mapped["Link"] = relationship(back_populates="links_to_delete")
     link: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    status: Mapped[StatusLinkChange] = mapped_column(
+        StatusLinkChangeType(), nullable=False, default=StatusLinkChange.PROCESS
+    )
 
 
 class LinkToCreate(Base):
     __tablename__ = "links_to_create"
     id: Mapped[int] = mapped_column(primary_key=True)
+    parent_link_id: Mapped[int] = mapped_column(ForeignKey("links.id"), nullable=False)
+    parent_link: Mapped["Link"] = relationship(back_populates="links_to_create")
     link: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-
-
-class Partner(Base):
-    __tablename__ = "partners"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), nullable=False)
-    phone: Mapped[str] = mapped_column(String(15), nullable=False)
-    location: Mapped[str] = mapped_column(String(100), nullable=False)
-
-    status: Mapped[StatusPartner] = mapped_column(
-        SAEnum(StatusPartner), nullable=False
+    status: Mapped[StatusLinkChange] = mapped_column(
+        StatusLinkChangeType(), nullable=False, default=StatusLinkChange.PROCESS
     )
 
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    cars: Mapped[List["Car"]] = relationship(
-        secondary="partner_cars",
-        back_populates="partners",
-    )
-
-    cars_count: Mapped[int] = mapped_column(Integer, default=0)
-
-partner_cars = Table(
-    "partner_cars",
-    Base.metadata,
-    Column("partner_id", ForeignKey("partners.id"), primary_key=True),
-    Column("car_id", ForeignKey("cars.id"), primary_key=True),
-)
-
-planed_tasks_cars = Table(
-    "planed_tasks_cars",
-    Base.metadata,
-    Column("planed_task_id", ForeignKey("planed_tasks_partners.id"), primary_key=True),
-    Column("car_id", ForeignKey("cars.id"), primary_key=True),
-)
-
-planed_tasks_link_car=Table(
-    "link_car",
-    Base.metadata,
-    Column("link_id", ForeignKey("links.id"), primary_key=True),
-    Column("car_id", ForeignKey("cars.id"), primary_key=True),
-)
 
 class Car(Base):
     __tablename__ = "cars"
@@ -150,6 +194,9 @@ class Car(Base):
     link: Mapped["Link"] = relationship(back_populates="cars")
     link_path: Mapped[str] = mapped_column(String(150), nullable=False)
     brand: Mapped[str] = mapped_column(String(50), nullable=False)
+    model: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # Модель авто (наприклад "TGL")
     fuel_type: Mapped[str] = mapped_column(String(50), nullable=False)
     transmission: Mapped[str] = mapped_column(String(50), nullable=False)
 
@@ -160,13 +207,22 @@ class Car(Base):
     color: Mapped[Optional[str]] = mapped_column(String(50))
     location: Mapped[Optional[str]] = mapped_column(String(50))
     source: Mapped[Optional[str]] = mapped_column(String(50))
+    path_to_images: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )  # Шлях до папки з обробленими зображеннями
+    truck_car_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # ID оголошення в TruckMarket
 
     car_values: Mapped[dict] = mapped_column(JSON, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    full_description: Mapped[Optional[str]] = mapped_column(
+        Text
+    )  # Детальний опис з //*[@id="col"]/div[6]/div/span/text()
 
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
     processed_status: Mapped[StatusProcessed] = mapped_column(
-        SAEnum(StatusProcessed), nullable=True
+        StatusProcessedType(), nullable=True
     )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -174,60 +230,18 @@ class Car(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    partners: Mapped[List["Partner"]] = relationship(
-        secondary="partner_cars",
-        back_populates="cars",
-    )
 
-    planed_tasks: Mapped[List["PlanedTask"]] = relationship(
-        secondary="planed_tasks_cars",
-        back_populates="processed_cars",
-    )
-
-
-class PlanedTask(Base):
-    __tablename__ = "planed_tasks_partners"
+class ProcessRun(Base):
+    """Моніторинг запусків процесів (Celery-таски): зберігається в БД, відображається в веб-адмінці."""
+    __tablename__ = "process_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), nullable=False)
-
-    status: Mapped[Status] = mapped_column(SAEnum(Status), nullable=False)
-
-    planed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    worker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
-
-    attempts_count: Mapped[int] = mapped_column(Integer, default=0)
-    started_processing_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    failed_reason: Mapped[Optional[str]] = mapped_column(Text)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    processed_cars: Mapped[List["Car"]] = relationship(
-        secondary="planed_tasks_cars",
-        back_populates="planed_tasks",
-    )
-
-    processed_cars_count: Mapped[int] = mapped_column(Integer, default=0)
-
-
-class AuditLog(Base):
-    __tablename__ = "audit_logs"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    action_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    before_data: Mapped[Optional[dict]] = mapped_column(JSON)
-    after_data: Mapped[Optional[dict]] = mapped_column(JSON)
-
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    task_name: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    details: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    celery_task_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Історія логів під час виконання: список {t, level, msg}
+    logs: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)

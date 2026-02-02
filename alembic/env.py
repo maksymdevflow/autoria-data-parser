@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -21,15 +22,15 @@ from database.db import Base
 from database.models import *
 
 target_metadata = Base.metadata
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
-config.set_main_option(
-    "sqlalchemy.url",
-    "postgresql+psycopg2://postgres:2002182000@localhost:5433/truck_partner_db"
-)
+# URL з env (як у database.db): у Docker — postgres:5432, локально — localhost:5433 тощо
+db_url = os.getenv("DATABASE_DEVELOPMENT_URI") or os.getenv("DATABASE_PRODUCTION_URI")
+if db_url:
+    if db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    elif db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    config.set_main_option("sqlalchemy.url", db_url)
 
 
 def run_migrations_offline() -> None:
@@ -70,9 +71,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

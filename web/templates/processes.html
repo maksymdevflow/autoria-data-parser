@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Моніторинг процесів — Autoria Parser{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 style="margin: 0 0 1rem 0;">Моніторинг процесів</h2>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+        Запуски Celery-тасків зберігаються в БД. Останній запуск по кожному типу та список останніх виконань з фільтрами.
+    </p>
+
+    {% set status_labels = {'success': 'Успішно', 'failed': 'Помилки', 'running': 'В процесі'} %}
+    <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-muted);">Останній запуск по типу</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        {% for name, label in task_names.items() %}
+        {% set run = stats.by_task.get(name) %}
+        <div class="card" style="padding: 1rem; margin: 0; border-left: 4px solid {% if run %}{% if run.status == 'success' %}var(--success){% elif run.status == 'failed' %}var(--error){% else %}var(--accent){% endif %}{% else %}var(--border){% endif %};">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">{{ label }}</div>
+            {% if run %}
+            <div style="font-size: 0.85rem;"><span class="badge badge-{{ run.status }}">{{ status_labels.get(run.status, run.status) }}</span></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">{{ run.started_at.strftime('%d.%m %H:%M') }}{% if run.finished_at %} — {{ run.finished_at.strftime('%H:%M') }}{% endif %}</div>
+            {% if run.message %}<div style="font-size: 0.8rem; margin-top: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ run.message }}">{{ run.message }}</div>{% endif %}
+            {% else %}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">—</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div style="margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
+        За останні 24 год:
+        {% for s, c in stats.last_24h.items() %}
+        <span class="badge badge-{{ s }}" style="margin-right: 0.35rem;">{{ status_labels.get(s, s) }}: {{ c }}</span>
+        {% endfor %}
+        {% if not stats.last_24h %}—{% endif %}
+    </div>
+
+    <form method="get" action="{{ url_for('processes_monitor') }}" style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+        <select name="task_name" style="width: auto; min-width: 200px;">
+            <option value="">Всі процеси</option>
+            {% for name, label in task_names.items() %}
+            <option value="{{ name }}" {{ 'selected' if task_name == name else '' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status" style="width: auto; min-width: 140px;">
+            <option value="">Всі статуси</option>
+            <option value="running" {{ 'selected' if status == 'running' else '' }}>В процесі</option>
+            <option value="success" {{ 'selected' if status == 'success' else '' }}>Успішно</option>
+            <option value="failed" {{ 'selected' if status == 'failed' else '' }}>Помилки</option>
+        </select>
+        <button type="submit" class="btn btn-secondary">Фільтр</button>
+        <a href="{{ url_for('processes_monitor') }}" class="btn btn-secondary">Скинути</a>
+    </form>
+
+    <div style="overflow-x: auto;">
+        <table class="processes-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Процес</th>
+                    <th>Статус</th>
+                    <th>Старт</th>
+                    <th>Кінець</th>
+                    <th>Тривалість</th>
+                    <th>Celery task</th>
+                    <th>Повідомлення</th>
+                    <th>Деталі</th>
+                    <th>Логи</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td>{{ run.id }}</td>
+                    <td>{{ task_names.get(run.task_name, run.task_name) }}</td>
+                    <td><span class="badge badge-{{ run.status }}">{{ status_labels.get(run.status, run.status) }}</span></td>
+                    <td>{{ run.started_at.strftime('%d.%m.%Y %H:%M:%S') if run.started_at else '—' }}</td>
+                    <td>{{ run.finished_at.strftime('%d.%m.%Y %H:%M:%S') if run.finished_at else '—' }}</td>
+                    <td>{% if run.finished_at and run.started_at %}{{ ((run.finished_at - run.started_at).total_seconds()) | round(1) }} с{% else %}—{% endif %}</td>
+                    <td style="font-size: 0.8rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis;" title="{{ run.celery_task_id or '' }}">{{ run.celery_task_id or '—' }}</td>
+                    <td style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ run.message or '' }}">{{ run.message or '—' }}</td>
+                    <td>
+                        {% if run.details %}
+                        <details class="details-inline">
+                            <summary>JSON</summary>
+                            <pre class="details-json">{{ run.details | tojson }}</pre>
+                        </details>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td><a href="{{ url_for('process_run_detail', run_id=run.id) }}" class="btn btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;">Логи</a></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="10" style="color: var(--text-muted);">Немає записів</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+.badge-running { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+.badge-success { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.badge-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+.details-inline { display: inline-block; vertical-align: top; }
+.details-inline summary { cursor: pointer; font-size: 0.8rem; color: var(--accent); }
+.details-json {
+    margin: 0.5rem 0 0 0; padding: 0.5rem; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); font-size: 0.75rem; max-height: 200px; overflow: auto;
+    white-space: pre-wrap; word-break: break-all;
+}
+</style>
+{% endblock %}

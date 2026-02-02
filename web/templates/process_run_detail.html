@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Запуск #{{ run.id }} — Моніторинг{% endblock %}
+{% block content %}
+<div class="card">
+    <p style="margin-bottom: 1rem;">
+        <a href="{{ url_for('processes_monitor') }}" style="color: var(--text-muted); text-decoration: none;">← Моніторинг</a>
+    </p>
+    <h2 style="margin: 0 0 1rem 0;">Запуск #{{ run.id }}</h2>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+        {{ task_names.get(run.task_name, run.task_name) }}
+    </p>
+    <table style="max-width: 600px; margin-bottom: 1.5rem;">
+        <tr><th style="width: 140px;">Статус</th><td><span class="badge badge-{{ run.status }}">{{ run.status }}</span></td></tr>
+        <tr><th>Старт</th><td>{{ run.started_at.strftime('%d.%m.%Y %H:%M:%S') if run.started_at else '—' }}</td></tr>
+        <tr><th>Кінець</th><td>{{ run.finished_at.strftime('%d.%m.%Y %H:%M:%S') if run.finished_at else '—' }}</td></tr>
+        <tr><th>Тривалість</th><td>{% if run.finished_at and run.started_at %}{{ ((run.finished_at - run.started_at).total_seconds()) | round(1) }} с{% else %}—{% endif %}</td></tr>
+        <tr><th>Celery task</th><td style="font-size: 0.85rem;">{{ run.celery_task_id or '—' }}</td></tr>
+        <tr><th>Повідомлення</th><td>{{ run.message or '—' }}</td></tr>
+    </table>
+    {% if run.details %}
+    <details style="margin-bottom: 1.5rem;">
+        <summary style="cursor: pointer; color: var(--accent);">Деталі (JSON)</summary>
+        <pre class="details-json">{{ run.details | tojson }}</pre>
+    </details>
+    {% endif %}
+
+    <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-muted);">Історія логів</h3>
+    {% if run.logs and run.logs | length > 0 %}
+    <div class="log-view">
+        <pre class="log-content">{% for entry in run.logs %}<span class="log-line log-{{ entry.level | lower }}"><span class="log-time">{{ entry.t }}</span> [<span class="log-level">{{ entry.level }}</span>] {{ entry.msg | e }}</span>
+{% endfor %}</pre>
+    </div>
+    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">Записів: {{ run.logs | length }}</p>
+    {% else %}
+    <p style="color: var(--text-muted);">Логів немає (таска ще не завершена або логи не збиралися).</p>
+    {% endif %}
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+.badge-running { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+.badge-success { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.badge-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+.details-json {
+    margin: 0.5rem 0 0 0; padding: 0.75rem; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); font-size: 0.75rem; max-height: 300px; overflow: auto;
+    white-space: pre-wrap; word-break: break-all;
+}
+.log-view { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; max-height: 70vh; }
+.log-content { margin: 0; padding: 0.75rem; font-size: 0.8rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.log-line { display: block; }
+.log-time { color: var(--text-muted); margin-right: 0.5rem; }
+.log-level { font-weight: 600; }
+.log-info .log-level { color: #60a5fa; }
+.log-warning .log-level { color: #facc15; }
+.log-error .log-level { color: #f87171; }
+.log-critical .log-level { color: #f87171; }
+.log-debug .log-level { color: var(--text-muted); }
+</style>
+{% endblock %}

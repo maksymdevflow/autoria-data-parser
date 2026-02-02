@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Статистика — Autoria Parser{% endblock %}
+{% block content %}
+<div class="card">
+    <h2 style="margin: 0 0 1rem 0;">Статистика по авто</h2>
+    <form method="get" action="{{ url_for('stats_page') }}" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Період</label>
+            <select name="period" style="width: auto; min-width: 120px;">
+                <option value="day" {{ 'selected' if period == 'day' else '' }}>День</option>
+                <option value="week" {{ 'selected' if period == 'week' else '' }}>Тиждень</option>
+                <option value="month" {{ 'selected' if period == 'month' else '' }}>Місяць</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Область</label>
+            <select name="scope" id="statsScope" style="width: auto; min-width: 160px;">
+                <option value="all" {{ 'selected' if scope == 'all' else '' }}>Всі авто</option>
+                <option value="owner" {{ 'selected' if scope == 'owner' else '' }}>По власнику</option>
+                <option value="link" {{ 'selected' if scope == 'link' else '' }}>По одному посиланню</option>
+            </select>
+        </div>
+        <div id="ownerSelect" style="display: {{ 'block' if scope == 'owner' else 'none' }};">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Власник</label>
+            <select name="owner" style="width: auto; min-width: 180px;">
+                <option value="">— оберіть —</option>
+                {% for o in owners %}
+                <option value="{{ o }}" {{ 'selected' if owner == o else '' }}>{{ o }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="linkSelect" style="display: {{ 'block' if scope == 'link' else 'none' }};">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Посилання</label>
+            <select name="link_id" style="width: auto; min-width: 200px; max-width: 320px;">
+                <option value="">— оберіть —</option>
+                {% for l in links_list %}
+                <option value="{{ l.id }}" {{ 'selected' if link_id == l.id else '' }}>{{ l.owner }} — #{{ l.id }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">Застосувати</button>
+    </form>
+
+    <div class="stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="card" style="padding: 1rem; margin: 0;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Всього за період</div>
+            <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);">{{ stats.total }}</div>
+        </div>
+        {% for status_name, count in stats.by_status.items() %}
+        <div class="card" style="padding: 1rem; margin: 0;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">{{ status_name }}</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">{{ count }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if stats.daily %}
+    <div style="margin-top: 1rem;">
+        <h3 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-muted);">По днях</h3>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Кількість авто</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for date in stats.daily.keys()|sort %}
+                    <tr>
+                        <td>{{ date }}</td>
+                        <td>{{ stats.daily[date] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <p style="color: var(--text-muted);">За обраний період немає даних.</p>
+    {% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+    var scope = document.getElementById('statsScope');
+    var ownerSelect = document.getElementById('ownerSelect');
+    var linkSelect = document.getElementById('linkSelect');
+    if (!scope) return;
+    function toggle() {
+        var v = scope.value;
+        ownerSelect.style.display = v === 'owner' ? 'block' : 'none';
+        linkSelect.style.display = v === 'link' ? 'block' : 'none';
+    }
+    scope.addEventListener('change', toggle);
+    toggle();
+})();
+</script>
+{% endblock %}
