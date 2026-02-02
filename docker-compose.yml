@@ -24,13 +24,14 @@ services:
     env_file: .env
     environment:
       PYTHONPATH: /app
-      FLASK_APP: web.app:app
+      GUNICORN_WORKERS: 4
+      GUNICORN_LOG_LEVEL: info
     ports:
       - "5000:5000"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    command: sh -c "alembic upgrade head && exec flask run --host 0.0.0.0 --port 5000"
+    command: sh -c "alembic upgrade head && exec gunicorn -c gunicorn.conf.py web.app:app"
 
   celery_worker:
     build: .

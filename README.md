@@ -54,6 +54,17 @@ docker-compose down -v
 docker-compose up --build
 ```
 
+## Безпека: Конфігурація через .env
+
+**Усі чутливі дані зберігаються у `.env` файлі** (він у `.gitignore` і не комітиться).
+
+**Перший запуск:**
+1. Скопіюй: `cp .env.example .env`
+2. Відредагуй `.env` - заповни реальні паролі та ключі
+3. Запусти: `docker-compose up --build -d`
+
+Docker Compose автоматично завантажує змінні через `env_file: .env` для всіх сервісів.
+
 ### Docker: міграції БД
 
 Після першого запуску або якщо таблиці відсутні, застосуй міграції:
@@ -64,10 +75,23 @@ docker-compose exec web alembic upgrade head
 
 Якщо web ще не піднятий: `docker-compose up -d` і знову виконай команду вище.
 
+### Production WSGI Server (Gunicorn)
+
+Застосунок використовує **Gunicorn** як production WSGI server замість Flask development server для:
+- Кращої продуктивності
+- Підтримки множинних workers
+- Стабільності під навантаженням
+
+**Конфігурація** (у `.env`):
+- `GUNICORN_WORKERS` - кількість worker процесів (за замовчуванням: 4)
+- `GUNICORN_LOG_LEVEL` - рівень логування (за замовчуванням: info)
+
+Детальна конфігурація: `gunicorn.conf.py`
+
 ### Деплой за nginx (HTTPS)
 
 Flask підтримує проксі: використовується `ProxyFix` (X-Forwarded-Proto, X-Forwarded-For, Host), щоб посилання були `https://` за nginx.
 
-- У docker-compose сервіс `web` відкриває порт **5000** (`WEB_PORT:-5000`).
-- У nginx вкажи `proxy_pass http://127.0.0.1:5000;` (або інший порт, якщо задав `WEB_PORT` у `.env`).
+- У docker-compose сервіс `web` відкриває порт **5000**.
+- У nginx вкажи `proxy_pass http://127.0.0.1:5000;`
 - Приклад конфігурації: `deploy/nginx-fincar.conf.example`.
