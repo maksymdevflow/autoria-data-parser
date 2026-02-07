@@ -430,7 +430,7 @@ class TruckMarket:
                     "geo_city is missing and GEO_CITY_ID_DEFAULT not set — API may return 400"
                 )
 
-        f_values = base.get("f_format_3_5t", {}) or {}
+        f_values = base.get("f_format", {}) or {}
 
         data = {
             "user_id": base.get("user_id"),
@@ -863,27 +863,46 @@ def prepare_car_data_for_truck_market_api(
     drive_type_key = (
         get_drive_type_key(drive_type, const["drive_types"]) if drive_type else None
     )
-
+    
     # Базове заповнення параметрів f1..f14
-    f_format_3_5t = {
-        "f1": body_type_key,
-        "f3": fuel_type_key,
-        "f4": engine_power,
-        "f5": 1,
-        "f7": car.year,
-        "f8": model_id,
-        "f9": engine_volume,
-        "f10": mileage_thousands,
-        "f12": transmission_type_key,
-        "f13": color_type_key,
-        "f14": drive_type_key,
-    }
+    if link_car_type == "5-15t":
+        format_f = {
+            "f17": model_id,               # Модель
+            "f1": body_type_key,           # Тип кузову
+            "f2": car.year,                # Рік випуску
+            "f3": transmission_type_key,   # Коробка передач
+            "f4": mileage_thousands,       # Пробіг
+            "f5": fuel_type_key,           # Пальне
+            "f6": engine_volume,           # Об’єм двигуна
+            "f7": engine_power,            # Потужність двигуна
+            "f8": drive_type_key,          # Привід
+            "f9": color_type_key,          # Колір
+            "f13": 1
+        }
+    elif link_car_type == "3.5t":
+        format_f = {
+            "f1": body_type_key,
+            "f3": fuel_type_key,
+            "f4": engine_power,
+            "f5": 1,
+            "f7": car.year,
+            "f8": model_id,
+            "f9": engine_volume,
+            "f10": mileage_thousands,
+            "f12": transmission_type_key,
+            "f13": color_type_key,
+            "f14": drive_type_key,
+        }
+
+        if mark_id == "4222" and model_id is not None:
+            format_f["f2"] = model_id
+            format_f["f8"] = None
+    else:
+        raise ValueError(f"Unsupported link_car_type: {link_car_type}")
 
     # Спеціальне правило для Citroen: модель має бути в полі f2, а не f8.
     # Це стосується всіх Citroen (mark_id == "4222").
-    if mark_id == "4222" and model_id is not None:
-        f_format_3_5t["f2"] = model_id
-        f_format_3_5t["f8"] = None
+            
     user_id = os.getenv("USER_ID")
     company_id = os.getenv("COMPANY_ID")
 
@@ -941,20 +960,5 @@ def prepare_car_data_for_truck_market_api(
         "price": price,
         "price_curr": price_curr,
         "geo_city_name": city_name,
-        "f_format_3_5t": f_format_3_5t,
+        "format_f": format_f,
     }
-
-
-if __name__ == "__main__":
-    session = SessionLocal()
-    cars = (
-        session.query(Car)
-        .filter(Car.processed_status == StatusProcessed.CREATED)
-        .first()
-        # .all()
-    )
-    # for car in cars:
-    #     print(car.id, car.link_path)
-    #     test=prepare_car_data_for_truck_market_api(car, None)
-    test = prepare_car_data_for_truck_market_api(cars, None)
-    print(test)

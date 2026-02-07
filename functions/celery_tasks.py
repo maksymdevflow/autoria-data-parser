@@ -371,7 +371,7 @@ def run_db_dump() -> str:
     run_id = start_process_run("db_dump")
     with capture_task_logs(run_id):
         try:
-            db_url = os.getenv("DATABASE_DEVELOPMENT_URI") or os.getenv("DATABASE_PRODUCTION_URI")
+            db_url = os.getenv("DATABASE_PRODUCTION_URI")
             if not db_url or "postgresql" not in db_url:
                 msg = "DATABASE_DEVELOPMENT_URI не задано або не PostgreSQL"
                 logger.warning("[db_dump] %s", msg)

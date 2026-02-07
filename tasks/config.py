@@ -71,6 +71,7 @@ celery_app.conf.task_routes = {
     "tasks.config.process_link_car_urls": {"queue": "parent_links"},
     "tasks.config.process_links_to_delete": {"queue": "truck_market"},
     "tasks.config.parse_links_to_create": {"queue": "parent_links"},
+    "tasks.config.delete_link": {"queue": "truck_market"},
     "tasks.config.db_dump": {"queue": "parent_links"},
 }
 
