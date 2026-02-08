@@ -402,7 +402,7 @@ class TruckMarket:
         link_car_type — категорія батьківського лінка (Link.car_type), визначає які константи використовувати (3.5т / 5-15т тощо).
         """
         base = prepare_car_data_for_truck_market_api(car, link_car_type)
-
+        print(f"Base payload for car {car.id}: {base}")
         # Отримуємо ID міста (TruckMarket не приймає geo_city=null — потрібен валідний id)
         geo_city_id = None
         city_name = base.get("geo_city_name")
@@ -430,7 +430,7 @@ class TruckMarket:
                     "geo_city is missing and GEO_CITY_ID_DEFAULT not set — API may return 400"
                 )
 
-        f_values = base.get("f_format", {}) or {}
+        f_values = base.get("format_f", {}) or {}
 
         data = {
             "user_id": base.get("user_id"),
@@ -879,6 +879,7 @@ def prepare_car_data_for_truck_market_api(
             "f9": color_type_key,          # Колір
             "f13": 1
         }
+        logger.info("Prepared format_f for 5-15т: %s", format_f)
     elif link_car_type == "3-5 тон":
         format_f = {
             "f1": body_type_key,
