@@ -865,7 +865,7 @@ def prepare_car_data_for_truck_market_api(
     )
     
     # Базове заповнення параметрів f1..f14
-    if link_car_type == "5-15t":
+    if link_car_type == "5-15 тон":
         format_f = {
             "f17": model_id,               # Модель
             "f1": body_type_key,           # Тип кузову
@@ -879,7 +879,7 @@ def prepare_car_data_for_truck_market_api(
             "f9": color_type_key,          # Колір
             "f13": 1
         }
-    elif link_car_type == "3.5t":
+    elif link_car_type == "3-5 тон":
         format_f = {
             "f1": body_type_key,
             "f3": fuel_type_key,
